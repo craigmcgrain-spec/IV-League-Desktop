@@ -69,6 +69,7 @@ class CsvImportDialog(QDialog):
 
     def _do_import(self):
         count = 0
+        skipped = 0
         for row in self.rows:
             facility_name = row.get("facility", "").strip()
             client_name = row.get("name", "").strip()
@@ -90,6 +91,10 @@ class CsvImportDialog(QDialog):
             if not task_id:
                 continue
 
+            if models.record_exists(client_id, facility_id, task_id, date_str, time_str):
+                skipped += 1
+                continue
+
             models.add_record(
                 client_id, facility_id, task_id,
                 date_str, time_str,
@@ -97,11 +102,13 @@ class CsvImportDialog(QDialog):
                 row.get("side") or None,
                 row.get("location") or None,
                 row.get("notes") or None,
+                row.get("clinician_name") or None,
+                row.get("clinician_credentials") or None,
             )
             count += 1
 
-        QMessageBox.information(
-            self, "Import Complete",
-            f"Successfully imported {count} record(s)."
-        )
+        msg = f"Imported {count} record(s)."
+        if skipped:
+            msg += f"\n{skipped} duplicate(s) skipped."
+        QMessageBox.information(self, "Import Complete", msg)
         self.accept()

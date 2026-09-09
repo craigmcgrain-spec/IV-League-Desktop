@@ -29,6 +29,44 @@ def get_facility_id(name):
 
 
 # ---------------------------------------------------------------------------
+# Clinicians
+# ---------------------------------------------------------------------------
+
+def get_all_clinicians():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM clinicians ORDER BY is_default DESC, name").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_clinician(name, credentials, is_default=0):
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO clinicians (name, credentials, is_default) VALUES (?, ?, ?)",
+        (name, credentials, is_default),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_clinician_id(name):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id FROM clinicians WHERE name = ?", (name,)
+    ).fetchone()
+    conn.close()
+    return row["id"] if row else None
+
+
+def set_default_clinician(clinician_id):
+    conn = get_connection()
+    conn.execute("UPDATE clinicians SET is_default = 0")
+    conn.execute("UPDATE clinicians SET is_default = 1 WHERE id = ?", (clinician_id,))
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Clients
 # ---------------------------------------------------------------------------
 
@@ -75,14 +113,29 @@ def get_task_id(name):
 # Records
 # ---------------------------------------------------------------------------
 
+def record_exists(client_id, facility_id, task_id, date, time):
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT id FROM records
+           WHERE client_id = ? AND facility_id = ? AND task_id = ?
+           AND date = ? AND time = ?""",
+        (client_id, facility_id, task_id, date, time),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
 def add_record(client_id, facility_id, task_id, date, time,
-               gauge=None, side=None, location=None, notes=None):
+               gauge=None, side=None, location=None, notes=None,
+               clinician_name=None, clinician_credentials=None):
     conn = get_connection()
     conn.execute(
         """INSERT INTO records
-           (client_id, facility_id, task_id, date, time, gauge, side, location, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (client_id, facility_id, task_id, date, time, gauge, side, location, notes),
+           (client_id, facility_id, task_id, date, time, gauge, side, location,
+            notes, clinician_name, clinician_credentials)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (client_id, facility_id, task_id, date, time, gauge, side, location,
+         notes, clinician_name, clinician_credentials),
     )
     conn.commit()
     conn.close()

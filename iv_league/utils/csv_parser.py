@@ -16,6 +16,8 @@ def parse_csv(path):
             facility = row.get("Facility", "").strip()
             room = row.get("Room Number", "").strip()
             details = row.get("Procedure Details", "").strip()
+            clinician_name = row.get("Clinician Name", "").strip()
+            clinician_cred = row.get("Clinician Credentials", "").strip()
 
             if not all([iso_time, task, client_name, facility]):
                 continue
@@ -55,5 +57,7 @@ def parse_csv(path):
                 "location": location,
                 "notes": notes,
                 "room": room,
+                "clinician_name": clinician_name,
+                "clinician_credentials": clinician_cred,
             })
     return rows

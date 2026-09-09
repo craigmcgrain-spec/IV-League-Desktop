@@ -35,6 +35,7 @@ class DataEntryWidget(QWidget):
         super().__init__()
         self._build_ui()
         self.refresh_facilities()
+        self.refresh_clinicians()
         self._refresh_tasks()
 
     def _build_ui(self):
@@ -60,6 +61,14 @@ class DataEntryWidget(QWidget):
         client_form.addRow("Name:", self.name_edit)
         client_group.setLayout(client_form)
         root.addWidget(client_group)
+
+        # -- Clinician --
+        clinician_group = QGroupBox("Clinician")
+        clinician_form = QFormLayout()
+        self.clinician_combo = QComboBox()
+        clinician_form.addRow("Clinician:", self.clinician_combo)
+        clinician_group.setLayout(clinician_form)
+        root.addWidget(clinician_group)
 
         # -- Date / Time --
         dt_group = QGroupBox("Date & Time")
@@ -122,6 +131,17 @@ class DataEntryWidget(QWidget):
         self.facility_combo.clear()
         self.facility_combo.addItems(names)
 
+    def refresh_clinicians(self):
+        clinicians = models.get_all_clinicians()
+        self.clinician_combo.clear()
+        default_index = 0
+        for i, c in enumerate(clinicians):
+            display = f"{c['name']}, {c['credentials']}" if c["credentials"] else c["name"]
+            self.clinician_combo.addItem(display, c["id"])
+            if c["is_default"]:
+                default_index = i
+        self.clinician_combo.setCurrentIndex(default_index)
+
     def _refresh_tasks(self):
         names = [t["name"] for t in models.get_all_tasks()]
         self.task_combo.clear()
@@ -178,10 +198,22 @@ class DataEntryWidget(QWidget):
         location = self.loc_combo.currentText() or None
         notes = self.notes_edit.text().strip() or None
 
+        clinician_id = self.clinician_combo.currentData()
+        clinician_name = None
+        clinician_cred = None
+        if clinician_id:
+            clinicians = models.get_all_clinicians()
+            for c in clinicians:
+                if c["id"] == clinician_id:
+                    clinician_name = c["name"]
+                    clinician_cred = c["credentials"]
+                    break
+
         models.add_record(
             client_id, facility_id, task_id,
             date_str, time_str,
             gauge, side, location, notes,
+            clinician_name, clinician_cred,
         )
 
         self.refresh_facilities()

@@ -56,10 +56,10 @@ class SearchViewWidget(QWidget):
 
         # -- Table --
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
             "Date", "Time", "Client", "Facility", "Task",
-            "Details", "Notes"
+            "Details", "Notes", "Clinician", "Credentials"
         ])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -96,7 +96,8 @@ class SearchViewWidget(QWidget):
             values = [
                 r["date"], r["time"], r["client_name"],
                 r["facility_name"], r["task_name"],
-                details, r.get("notes", "")
+                details, r.get("notes", ""),
+                r.get("clinician_name", ""), r.get("clinician_credentials", ""),
             ]
             for j, val in enumerate(values):
                 item = QTableWidgetItem(str(val or ""))

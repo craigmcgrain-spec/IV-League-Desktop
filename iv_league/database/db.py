@@ -49,6 +49,8 @@ def init_db():
             side TEXT,
             location TEXT,
             notes TEXT,
+            clinician_name TEXT,
+            clinician_credentials TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (client_id) REFERENCES clients(id),
             FOREIGN KEY (facility_id) REFERENCES facilities(id),
@@ -63,6 +65,14 @@ def init_db():
             total REAL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (facility_id) REFERENCES facilities(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS clinicians (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            credentials TEXT NOT NULL,
+            is_default INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
 
@@ -79,10 +89,32 @@ def init_db():
             "INSERT OR IGNORE INTO tasks (name) VALUES (?)", (task,)
         )
 
+    cursor.execute(
+        "INSERT OR IGNORE INTO clinicians (name, credentials, is_default) VALUES (?, ?, ?)",
+        ("Select Clinician", "", 1)
+    )
+
+    conn.commit()
+    conn.close()
+    _migrate_add_clinician_columns()
+
+
+def _migrate_add_clinician_columns():
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE records ADD COLUMN clinician_name TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE records ADD COLUMN clinician_credentials TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
 
 if __name__ == "__main__":
     init_db()
+    _migrate_add_clinician_columns()
     print(f"Database initialized at {DB_PATH}")

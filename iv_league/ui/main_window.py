@@ -1,12 +1,17 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QMenuBar, QStatusBar, QVBoxLayout, QWidget
 )
+from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt
+import os
 from .data_entry import DataEntryWidget
 from .search_view import SearchViewWidget
 from .invoicing import InvoicingWidget
 from .facility_directory import FacilityDirectoryWidget
+from .clinician_directory import ClinicianDirectoryWidget
 from .csv_import import CsvImportDialog
+
+_ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets")
 
 
 class MainWindow(QMainWindow):
@@ -14,6 +19,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("IV League")
         self.setMinimumSize(900, 600)
+        self.setWindowIcon(QIcon(os.path.join(_ASSETS, "icon.svg")))
 
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
@@ -32,12 +38,15 @@ class MainWindow(QMainWindow):
         self.search_view = SearchViewWidget()
         self.invoicing = InvoicingWidget()
         self.facility_dir = FacilityDirectoryWidget()
+        self.clinician_dir = ClinicianDirectoryWidget()
         self.facility_dir.facility_added.connect(self.data_entry.refresh_facilities)
+        self.clinician_dir.clinician_added.connect(self.data_entry.refresh_clinicians)
 
         tabs.addTab(self.data_entry, "Data Entry")
         tabs.addTab(self.search_view, "Search Records")
         tabs.addTab(self.invoicing, "Invoicing")
         tabs.addTab(self.facility_dir, "Facilities")
+        tabs.addTab(self.clinician_dir, "Clinicians")
 
         self.statusBar().showMessage("Ready")
 
