@@ -25,7 +25,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
-SetupIconFile=iv_league\assets\icon.ico
+SetupIconFile=..\iv_league\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
