@@ -21,7 +21,7 @@ pip install --target=${APP_DIR}/usr/lib/python3/site-packages PyQt6 reportlab
 
 # Copy application files
 cp -r iv_league ${APP_DIR}/usr/lib/python3/site-packages/
-cp main.py ${APP_DIR}/usr/bin/iv-league
+cp main.py ${APP_DIR}/usr/lib/python3/site-packages/main.py
 
 # Create wrapper script
 cat > ${APP_DIR}/usr/bin/iv-league << 'EOF'
@@ -33,7 +33,7 @@ EOF
 chmod +x ${APP_DIR}/usr/bin/iv-league
 
 # Create desktop file
-cat > ${APP_DIR}/usr/share/applications/iv-league.desktop << EOF
+cat > ${APP_DIR}/iv-league.desktop << EOF
 [Desktop Entry]
 Name=IV League
 Comment=IV Therapy Tracking and Invoicing
@@ -41,8 +41,7 @@ Exec=iv-league
 Icon=iv-league
 Terminal=false
 Type=Application
-Categories=Medical;Utility;
-Version=${VERSION}
+Categories=Utility;
 EOF
 
 # Copy icon

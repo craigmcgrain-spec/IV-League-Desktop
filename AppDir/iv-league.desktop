@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=IV League
+Comment=IV Therapy Tracking and Invoicing
+Exec=iv-league
+Icon=iv-league
+Terminal=false
+Type=Application
+Categories=Utility;

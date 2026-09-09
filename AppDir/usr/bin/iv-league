@@ -1,0 +1,4 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${DIR}/../lib/python3/site-packages:${PYTHONPATH}"
+python3 "${DIR}/../lib/python3/site-packages/main.py" "$@"
