@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build AppImage for IV League Desktop
+# Build AppImage for IV League Desktop using PyInstaller
 set -e
 
 APP_NAME="IVLeague"
@@ -9,27 +9,26 @@ VERSION="1.0.0"
 echo "Building IV League Desktop v${VERSION} AppImage..."
 
 # Clean previous build
-rm -rf ${APP_DIR} *.AppImage
+rm -rf ${APP_DIR} *.AppImage dist build *.spec
+
+# Build single binary with PyInstaller
+echo "Running PyInstaller..."
+pyinstaller \
+    --onefile \
+    --windowed \
+    --name IVLeague \
+    --add-data "iv_league/assets:iv_league/assets" \
+    --add-data "iv_league/database:iv_league/database" \
+    --clean \
+    main.py
 
 # Create AppDir structure
 mkdir -p ${APP_DIR}/usr/bin
 mkdir -p ${APP_DIR}/usr/share/applications
 mkdir -p ${APP_DIR}/usr/share/icons/hicolor/256x256/apps
 
-# Install Python dependencies
-pip install --target=${APP_DIR}/usr/lib/python3/site-packages PyQt6 reportlab
-
-# Copy application files
-cp -r iv_league ${APP_DIR}/usr/lib/python3/site-packages/
-cp main.py ${APP_DIR}/usr/lib/python3/site-packages/main.py
-
-# Create wrapper script
-cat > ${APP_DIR}/usr/bin/iv-league << 'EOF'
-#!/bin/bash
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONPATH="${DIR}/../lib/python3/site-packages:${PYTHONPATH}"
-python3 "${DIR}/../lib/python3/site-packages/main.py" "$@"
-EOF
+# Copy PyInstaller binary
+cp dist/IVLeague ${APP_DIR}/usr/bin/iv-league
 chmod +x ${APP_DIR}/usr/bin/iv-league
 
 # Create desktop file
@@ -47,6 +46,9 @@ EOF
 # Copy icon
 cp iv_league/assets/icon.svg ${APP_DIR}/usr/share/icons/hicolor/256x256/apps/iv-league.svg
 cp iv_league/assets/icon.svg ${APP_DIR}/iv-league.svg
+
+# Create AppRun entry point
+ln -sf usr/bin/iv-league ${APP_DIR}/AppRun
 
 # Download appimagetools if not present
 if [ ! -f appimagetool-x86_64.AppImage ]; then

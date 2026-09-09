@@ -8,7 +8,7 @@
 #define MyAppExeName "IVLeague.exe"
 
 [Setup]
-AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppId={{B5E3A7D1-4F82-4C69-9A1E-2D8F6C3B5E7A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -25,8 +25,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
-LicenseFile=LICENSE
-InfoAfterFile=README.md
+SetupIconFile=iv_league\assets\icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -35,9 +35,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
+; PyInstaller bundles everything into the single .exe
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "iv_league\assets\*"; DestDir: "{app}\iv_league\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "iv_league\database\*"; DestDir: "{app}\iv_league\database"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
