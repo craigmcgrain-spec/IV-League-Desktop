@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "iv-league-desktop"
+version = "1.0.0"
+description = "IV League Desktop - Therapy tracking and invoicing"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.4.0",
+    "reportlab>=3.6.0",
+]
+
+[project.scripts]
+iv-league = "main:main"
+
+[tool.pyinstaller]
+onefile = true
+windowed = true
+name = "IVLeague"
+icon = "iv_league/assets/icon.svg"
