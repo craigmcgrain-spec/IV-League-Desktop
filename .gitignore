@@ -1,11 +1,15 @@
-__pycache__/
-*.pyc
-*.pyo
-*.db
-*.db-journal
-*.egg-info/
+# Build artifacts
+*.AppImage
+AppDir/
 dist/
 build/
 *.spec
-.venv/
-venv/
+__pycache__/
+*.pyc
+
+# Database (user data)
+*.db
+
+# IDE
+.vscode/
+.idea/
