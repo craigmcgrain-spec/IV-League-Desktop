@@ -10,6 +10,8 @@ from .invoicing import InvoicingWidget
 from .facility_directory import FacilityDirectoryWidget
 from .clinician_directory import ClinicianDirectoryWidget
 from .csv_import import CsvImportDialog
+from .company_info_dialog import CompanyInfoDialog
+from .pricing import PricingWidget
 
 _ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets")
 
@@ -31,6 +33,10 @@ class MainWindow(QMainWindow):
         quit_action = file_menu.addAction("&Quit")
         quit_action.triggered.connect(self.close)
 
+        edit_menu = menu.addMenu("&Edit")
+        company_action = edit_menu.addAction("&Company Info...")
+        company_action.triggered.connect(self.open_company_info)
+
         tabs = QTabWidget()
         self.setCentralWidget(tabs)
 
@@ -39,12 +45,14 @@ class MainWindow(QMainWindow):
         self.invoicing = InvoicingWidget()
         self.facility_dir = FacilityDirectoryWidget()
         self.clinician_dir = ClinicianDirectoryWidget()
+        self.pricing = PricingWidget()
         self.facility_dir.facility_added.connect(self.data_entry.refresh_facilities)
         self.clinician_dir.clinician_added.connect(self.data_entry.refresh_clinicians)
 
         tabs.addTab(self.data_entry, "Data Entry")
         tabs.addTab(self.search_view, "Search Records")
         tabs.addTab(self.invoicing, "Invoicing")
+        tabs.addTab(self.pricing, "Pricing")
         tabs.addTab(self.facility_dir, "Facilities")
         tabs.addTab(self.clinician_dir, "Clinicians")
 
@@ -52,4 +60,8 @@ class MainWindow(QMainWindow):
 
     def open_csv_import(self):
         dlg = CsvImportDialog(self)
+        dlg.exec()
+
+    def open_company_info(self):
+        dlg = CompanyInfoDialog(self)
         dlg.exec()

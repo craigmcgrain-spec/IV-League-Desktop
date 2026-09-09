@@ -104,6 +104,8 @@ class CsvImportDialog(QDialog):
                 row.get("notes") or None,
                 row.get("clinician_name") or None,
                 row.get("clinician_credentials") or None,
+                row.get("attempts"),
+                row.get("cap_change", 0),
             )
             count += 1
 

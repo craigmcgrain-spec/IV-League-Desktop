@@ -1,5 +1,60 @@
 import csv
+import re
 from datetime import datetime
+
+GAUGE_PATTERN = re.compile(r"^(\d+ga)$")
+ATTEMPTS_PATTERN = re.compile(r"^Attempts:\s*(\d+)$", re.IGNORECASE)
+CAP_CHANGE_PATTERN = re.compile(r"^Cap change:\s*(Yes|No)$", re.IGNORECASE)
+SIDE_OPTIONS = {"Left", "Right"}
+
+
+def _parse_procedure_details(details):
+    gauge = ""
+    side = ""
+    location = ""
+    notes = ""
+    attempts = None
+    cap_change = 0
+
+    if not details:
+        return gauge, side, location, notes, attempts, cap_change
+
+    parts = [p.strip() for p in details.split("·")]
+
+    for part in parts:
+        attempts_match = ATTEMPTS_PATTERN.match(part)
+        if attempts_match:
+            attempts = int(attempts_match.group(1))
+            continue
+
+        cap_match = CAP_CHANGE_PATTERN.match(part)
+        if cap_match:
+            cap_change = 1 if cap_match.group(1).lower() == "yes" else 0
+            continue
+
+        gauge_match = GAUGE_PATTERN.match(part)
+
+        tokens = part.split()
+        if tokens and tokens[0] in SIDE_OPTIONS:
+            side_match = tokens[0]
+        else:
+            side_match = None
+
+        if gauge_match:
+            gauge = gauge_match.group(1)
+        elif side_match:
+            side = side_match
+            location = " ".join(tokens[1:])
+        elif not side and not location:
+            location = part
+        else:
+            notes = (notes + " · " + part).strip(" ·")
+
+    if notes and not side and not location and not gauge:
+        notes = ""
+        location = details
+
+    return gauge, side, location, notes, attempts, cap_change
 
 
 def parse_csv(path):
@@ -32,19 +87,7 @@ def parse_csv(path):
                 except ValueError:
                     continue
 
-            side = ""
-            location = ""
-            notes = details
-            if "·" in details:
-                parts = details.split("·", 1)
-                side_loc = parts[0].strip()
-                notes = parts[1].strip() if len(parts) > 1 else ""
-                tokens = side_loc.split()
-                if tokens and tokens[0] in ("Left", "Right"):
-                    side = tokens[0]
-                    location = " ".join(tokens[1:])
-                else:
-                    location = side_loc
+            gauge, side, location, notes, attempts, cap_change = _parse_procedure_details(details)
 
             rows.append({
                 "facility": facility,
@@ -52,10 +95,12 @@ def parse_csv(path):
                 "date": date_str,
                 "time": time_str,
                 "task": task,
-                "gauge": "",
+                "gauge": gauge,
                 "side": side,
                 "location": location,
                 "notes": notes,
+                "attempts": attempts,
+                "cap_change": cap_change,
                 "room": room,
                 "clinician_name": clinician_name,
                 "clinician_credentials": clinician_cred,

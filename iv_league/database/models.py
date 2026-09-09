@@ -28,6 +28,55 @@ def get_facility_id(name):
     return row["id"] if row else None
 
 
+def get_facility(facility_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM facilities WHERE id = ?", (facility_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_facility(facility_id, name=None, address=None, phone=None,
+                    contact_name=None, contact_email=None,
+                    street=None, city=None, zip=None):
+    conn = get_connection()
+    fields = []
+    values = []
+    if name is not None:
+        fields.append("name = ?")
+        values.append(name)
+    if address is not None:
+        fields.append("address = ?")
+        values.append(address)
+    if phone is not None:
+        fields.append("phone = ?")
+        values.append(phone)
+    if contact_name is not None:
+        fields.append("contact_name = ?")
+        values.append(contact_name)
+    if contact_email is not None:
+        fields.append("contact_email = ?")
+        values.append(contact_email)
+    if street is not None:
+        fields.append("street = ?")
+        values.append(street)
+    if city is not None:
+        fields.append("city = ?")
+        values.append(city)
+    if zip is not None:
+        fields.append("zip = ?")
+        values.append(zip)
+    if fields:
+        values.append(facility_id)
+        conn.execute(
+            f"UPDATE facilities SET {', '.join(fields)} WHERE id = ?",
+            values,
+        )
+        conn.commit()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Clinicians
 # ---------------------------------------------------------------------------
@@ -60,8 +109,10 @@ def get_clinician_id(name):
 
 def set_default_clinician(clinician_id):
     conn = get_connection()
-    conn.execute("UPDATE clinicians SET is_default = 0")
-    conn.execute("UPDATE clinicians SET is_default = 1 WHERE id = ?", (clinician_id,))
+    conn.execute(
+        "UPDATE clinicians SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END",
+        (clinician_id,),
+    )
     conn.commit()
     conn.close()
 
@@ -127,15 +178,16 @@ def record_exists(client_id, facility_id, task_id, date, time):
 
 def add_record(client_id, facility_id, task_id, date, time,
                gauge=None, side=None, location=None, notes=None,
-               clinician_name=None, clinician_credentials=None):
+               clinician_name=None, clinician_credentials=None,
+               attempts=None, cap_change=None):
     conn = get_connection()
     conn.execute(
         """INSERT INTO records
            (client_id, facility_id, task_id, date, time, gauge, side, location,
-            notes, clinician_name, clinician_credentials)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            notes, clinician_name, clinician_credentials, attempts, cap_change)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (client_id, facility_id, task_id, date, time, gauge, side, location,
-         notes, clinician_name, clinician_credentials),
+         notes, clinician_name, clinician_credentials, attempts, cap_change),
     )
     conn.commit()
     conn.close()
@@ -207,3 +259,112 @@ def save_invoice(facility_id, start_date, end_date, total):
     )
     conn.commit()
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Company Info
+# ---------------------------------------------------------------------------
+
+def get_company_info():
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM company_info WHERE id = 1").fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return {
+        "name": "The IV League II",
+        "street": "",
+        "city": "",
+        "zip": "",
+        "phone": "",
+        "contact_name": "",
+        "contact_email": "",
+    }
+
+
+def save_company_info(info):
+    conn = get_connection()
+    conn.execute(
+        """INSERT OR REPLACE INTO company_info (id, name, street, city, zip, phone, contact_name, contact_email)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            info.get("name", "The IV League II"),
+            info.get("street", ""),
+            info.get("city", ""),
+            info.get("zip", ""),
+            info.get("phone", ""),
+            info.get("contact_name", ""),
+            info.get("contact_email", ""),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Pricing
+# ---------------------------------------------------------------------------
+
+def get_all_pricing():
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT t.name AS task_name, p.task_id, p.price
+           FROM pricing p
+           JOIN tasks t ON p.task_id = t.id
+           ORDER BY t.name"""
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_price(task_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
+    ).fetchone()
+    conn.close()
+    return row["price"] if row else 0
+
+
+def set_price(task_id, price):
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO pricing (task_id, price) VALUES (?, ?)",
+        (task_id, price),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_invoice_records_priced(facility_id, start_date, end_date):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT t.name AS task_name, COUNT(*) AS qty,
+                  COALESCE(p.price, 0) AS price,
+                  COUNT(*) * COALESCE(p.price, 0) AS subtotal
+           FROM records r
+           JOIN tasks t ON r.task_id = t.id
+           LEFT JOIN pricing p ON r.task_id = p.task_id
+           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
+           GROUP BY t.name""",
+        (facility_id, start_date, end_date),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_invoice_items_dated(facility_id, start_date, end_date):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT r.date, r.time, c.name AS client_name, t.name AS task_name,
+                  COALESCE(p.price, 0) AS price
+           FROM records r
+           JOIN clients c ON r.client_id = c.id
+           JOIN tasks t ON r.task_id = t.id
+           LEFT JOIN pricing p ON r.task_id = p.task_id
+           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
+           ORDER BY r.date, r.time""",
+        (facility_id, start_date, end_date),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

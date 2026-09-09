@@ -44,12 +44,15 @@ class DataEntryWidget(QWidget):
         # -- Facility --
         fac_group = QGroupBox("Facility")
         fac_form = QFormLayout()
+        fac_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        fac_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.facility_combo = QComboBox()
         self.facility_combo.setEditable(True)
         self.facility_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.facility_combo.completer().setFilterMode(
             Qt.MatchFlag.MatchContains
         )
+        self.facility_combo.setMinimumWidth(300)
         fac_form.addRow("Facility:", self.facility_combo)
         fac_group.setLayout(fac_form)
         root.addWidget(fac_group)
@@ -57,7 +60,10 @@ class DataEntryWidget(QWidget):
         # -- Client --
         client_group = QGroupBox("Client")
         client_form = QFormLayout()
+        client_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        client_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.name_edit = QLineEdit()
+        self.name_edit.setMinimumWidth(300)
         client_form.addRow("Name:", self.name_edit)
         client_group.setLayout(client_form)
         root.addWidget(client_group)
@@ -65,19 +71,27 @@ class DataEntryWidget(QWidget):
         # -- Clinician --
         clinician_group = QGroupBox("Clinician")
         clinician_form = QFormLayout()
+        clinician_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        clinician_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.clinician_combo = QComboBox()
+        self.clinician_combo.setMinimumWidth(300)
         clinician_form.addRow("Clinician:", self.clinician_combo)
         clinician_group.setLayout(clinician_form)
         root.addWidget(clinician_group)
 
         # -- Date / Time --
         dt_group = QGroupBox("Date & Time")
-        dt_form = QFormLayout()
+        dt_layout = QHBoxLayout()
+
+        dt_left = QFormLayout()
+        dt_left.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        dt_form.addRow("Date:", self.date_edit)
+        dt_left.addRow("Date:", self.date_edit)
 
+        dt_right = QFormLayout()
+        dt_right.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.time_edit = QLineEdit()
         self.time_edit.setPlaceholderText("HH:MM")
         time_validator = QRegularExpressionValidator(
@@ -85,31 +99,53 @@ class DataEntryWidget(QWidget):
         )
         self.time_edit.setValidator(time_validator)
         self.time_edit.setText(QTime.currentTime().toString("HH:mm"))
-        dt_form.addRow("Time:", self.time_edit)
-        dt_group.setLayout(dt_form)
+        dt_right.addRow("Time:", self.time_edit)
+
+        dt_layout.addLayout(dt_left)
+        dt_layout.addLayout(dt_right)
+        dt_group.setLayout(dt_layout)
         root.addWidget(dt_group)
 
         # -- Task --
         task_group = QGroupBox("Task")
         task_form = QFormLayout()
+        task_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        task_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.task_combo = QComboBox()
+        self.task_combo.setMinimumWidth(300)
         self.task_combo.currentTextChanged.connect(self._on_task_changed)
         task_form.addRow("Task:", self.task_combo)
 
         self.gauge_label = QLabel("Gauge:")
         self.gauge_combo = QComboBox()
+        self.gauge_combo.setMinimumWidth(300)
         task_form.addRow(self.gauge_label, self.gauge_combo)
 
         self.side_label = QLabel("Side:")
         self.side_combo = QComboBox()
+        self.side_combo.setMinimumWidth(300)
         task_form.addRow(self.side_label, self.side_combo)
 
         self.loc_label = QLabel("Location:")
         self.loc_combo = QComboBox()
+        self.loc_combo.setMinimumWidth(300)
         task_form.addRow(self.loc_label, self.loc_combo)
+
+        self.attempts_label = QLabel("Attempts:")
+        self.attempts_edit = QLineEdit()
+        self.attempts_edit.setPlaceholderText("Number of attempts")
+        self.attempts_edit.setMinimumWidth(300)
+        task_form.addRow(self.attempts_label, self.attempts_edit)
+
+        self.cap_label = QLabel("Cap Change:")
+        self.cap_combo = QComboBox()
+        self.cap_combo.addItems(["No", "Yes"])
+        self.cap_combo.setMinimumWidth(300)
+        task_form.addRow(self.cap_label, self.cap_combo)
 
         self.notes_label = QLabel("Notes:")
         self.notes_edit = QLineEdit()
+        self.notes_edit.setMinimumWidth(300)
         task_form.addRow(self.notes_label, self.notes_edit)
 
         task_group.setLayout(task_form)
@@ -132,7 +168,7 @@ class DataEntryWidget(QWidget):
         self.facility_combo.addItems(names)
 
     def refresh_clinicians(self):
-        clinicians = models.get_all_clinicians()
+        clinicians = [c for c in models.get_all_clinicians() if c["name"] != "Select Clinician"]
         self.clinician_combo.clear()
         default_index = 0
         for i, c in enumerate(clinicians):
@@ -198,6 +234,11 @@ class DataEntryWidget(QWidget):
         location = self.loc_combo.currentText() or None
         notes = self.notes_edit.text().strip() or None
 
+        attempts_text = self.attempts_edit.text().strip()
+        attempts = int(attempts_text) if attempts_text.isdigit() else None
+
+        cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
+
         clinician_id = self.clinician_combo.currentData()
         clinician_name = None
         clinician_cred = None
@@ -214,9 +255,11 @@ class DataEntryWidget(QWidget):
             date_str, time_str,
             gauge, side, location, notes,
             clinician_name, clinician_cred,
+            attempts, cap_change,
         )
 
         self.refresh_facilities()
         QMessageBox.information(self, "Saved", "Record saved successfully.")
         self.name_edit.clear()
         self.notes_edit.clear()
+        self.attempts_edit.clear()

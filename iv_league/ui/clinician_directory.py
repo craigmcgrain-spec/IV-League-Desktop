@@ -52,7 +52,7 @@ class ClinicianDirectoryWidget(QWidget):
         layout.addLayout(btn_row)
 
     def _refresh(self):
-        clinicians = models.get_all_clinicians()
+        clinicians = [c for c in models.get_all_clinicians() if not c["is_default"] or c["name"] != "Select Clinician"]
         self.table.setRowCount(len(clinicians))
         for i, c in enumerate(clinicians):
             self.table.setItem(i, 0, QTableWidgetItem(c["name"]))

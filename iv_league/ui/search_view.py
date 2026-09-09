@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QDateEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QMessageBox, QHeaderView, QGroupBox
 )
-from PyQt6.QtCore import QDate, Qt
+from PyQt6.QtCore import QDate, Qt, QSettings
 from ..database import models
 
 
@@ -56,15 +56,18 @@ class SearchViewWidget(QWidget):
 
         # -- Table --
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
             "Date", "Time", "Client", "Facility", "Task",
-            "Details", "Notes", "Clinician", "Credentials"
+            "Details", "Notes", "Attempts", "Cap Change", "Clinician", "Credentials"
         ])
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._settings = QSettings("IVLeague", "Desktop")
+        self._load_column_widths()
+        header.sectionResized.connect(self._save_column_widths)
         root.addWidget(self.table)
 
     def _load_facilities(self):
@@ -74,6 +77,19 @@ class SearchViewWidget(QWidget):
     def _load_tasks(self):
         for t in models.get_all_tasks():
             self.task_combo.addItem(t["name"], t["id"])
+
+    def _load_column_widths(self):
+        widths = self._settings.value("searchColumnWidths")
+        if widths:
+            header = self.table.horizontalHeader()
+            for i, w in enumerate(widths):
+                if i < self.table.columnCount():
+                    header.resizeSection(i, int(w))
+
+    def _save_column_widths(self, logicalIndex, oldSize, newSize):
+        header = self.table.horizontalHeader()
+        widths = [header.sectionSize(i) for i in range(self.table.columnCount())]
+        self._settings.setValue("searchColumnWidths", widths)
 
     def _refresh(self):
         fac_id = self.facility_combo.currentData()
@@ -97,6 +113,8 @@ class SearchViewWidget(QWidget):
                 r["date"], r["time"], r["client_name"],
                 r["facility_name"], r["task_name"],
                 details, r.get("notes", ""),
+                str(r["attempts"]) if r.get("attempts") is not None else "",
+                "Yes" if r.get("cap_change") else "No",
                 r.get("clinician_name", ""), r.get("clinician_credentials", ""),
             ]
             for j, val in enumerate(values):

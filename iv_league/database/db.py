@@ -74,6 +74,23 @@ def init_db():
             is_default INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS company_info (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            name TEXT DEFAULT 'The IV League II',
+            street TEXT,
+            city TEXT,
+            zip TEXT,
+            phone TEXT,
+            contact_name TEXT,
+            contact_email TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS pricing (
+            task_id INTEGER PRIMARY KEY,
+            price REAL DEFAULT 0,
+            FOREIGN KEY (task_id) REFERENCES tasks(id)
+        );
     """)
 
     default_tasks = [
@@ -83,6 +100,7 @@ def init_db():
         "Dressing Change",
         "Blood Draw",
         "Troubleshoot",
+        "Port Access",
     ]
     for task in default_tasks:
         cursor.execute(
@@ -94,9 +112,17 @@ def init_db():
         ("Select Clinician", "", 1)
     )
 
+    cursor.execute(
+        "UPDATE clinicians SET is_default = 1 WHERE name = 'Select Clinician' "
+        "AND NOT EXISTS (SELECT 1 FROM clinicians WHERE is_default = 1 AND name != 'Select Clinician')"
+    )
+
     conn.commit()
     conn.close()
     _migrate_add_clinician_columns()
+    _migrate_add_facility_details()
+    _migrate_add_attempts()
+    _migrate_add_company_info()
 
 
 def _migrate_add_clinician_columns():
@@ -110,6 +136,61 @@ def _migrate_add_clinician_columns():
         cursor.execute("ALTER TABLE records ADD COLUMN clinician_credentials TEXT")
     except sqlite3.OperationalError:
         pass
+    conn.commit()
+    conn.close()
+
+
+def _migrate_add_facility_details():
+    conn = get_connection()
+    cursor = conn.cursor()
+    for col in ("address", "phone", "contact_name", "contact_email",
+                "street", "city", "zip"):
+        try:
+            cursor.execute(f"ALTER TABLE facilities ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+    conn.close()
+
+
+def _migrate_add_attempts():
+    conn = get_connection()
+    try:
+        conn.execute("ALTER TABLE records ADD COLUMN attempts INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE records ADD COLUMN cap_change INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    conn.close()
+
+
+def _migrate_add_company_info():
+    conn = get_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS company_info (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            name TEXT DEFAULT 'The IV League II',
+            street TEXT,
+            city TEXT,
+            zip TEXT,
+            phone TEXT,
+            contact_name TEXT,
+            contact_email TEXT
+        )
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO company_info (id, name) VALUES (1, 'The IV League II')
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pricing (
+            task_id INTEGER PRIMARY KEY,
+            price REAL DEFAULT 0,
+            FOREIGN KEY (task_id) REFERENCES tasks(id)
+        )
+    """)
     conn.commit()
     conn.close()
 

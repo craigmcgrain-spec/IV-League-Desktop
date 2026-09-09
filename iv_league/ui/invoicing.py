@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QDateEdit, QPushButton, QTableWidget, QTableWidgetItem,
     QGroupBox, QLabel, QFileDialog, QMessageBox
 )
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 from ..database import models
 from ..utils.invoice_generator import generate_invoice_pdf
 
@@ -17,7 +17,6 @@ class InvoicingWidget(QWidget):
     def _build_ui(self):
         root = QVBoxLayout(self)
 
-        # -- Selection --
         sel_group = QGroupBox("Invoice Parameters")
         sel_form = QFormLayout()
 
@@ -37,7 +36,6 @@ class InvoicingWidget(QWidget):
         sel_group.setLayout(sel_form)
         root.addWidget(sel_group)
 
-        # -- Generate --
         btn_row = QHBoxLayout()
         self.generate_btn = QPushButton("Generate Invoice")
         self.generate_btn.clicked.connect(self._generate)
@@ -45,16 +43,14 @@ class InvoicingWidget(QWidget):
         btn_row.addWidget(self.generate_btn)
         root.addLayout(btn_row)
 
-        # -- Preview Table --
         self.table = QTableWidget()
-        self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["Task", "Quantity"])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Task", "Quantity", "Price", "Subtotal"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         root.addWidget(self.table)
 
-        # -- Total --
-        self.total_label = QLabel("Total: 0")
+        self.total_label = QLabel("Total: $0.00")
         self.total_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         root.addWidget(self.total_label)
 
@@ -72,15 +68,27 @@ class InvoicingWidget(QWidget):
             QMessageBox.warning(self, "Error", "Select a facility.")
             return
 
-        items = models.get_invoice_records(fac_id, start, end)
+        items = models.get_invoice_records_priced(fac_id, start, end)
+        items_dated = models.get_invoice_items_dated(fac_id, start, end)
+
         self.table.setRowCount(len(items))
-        total = 0
+        grand_total = 0
         for i, item in enumerate(items):
             self.table.setItem(i, 0, QTableWidgetItem(item["task_name"]))
             self.table.setItem(i, 1, QTableWidgetItem(str(item["qty"])))
-            total += item["qty"]
 
-        self.total_label.setText(f"Total Procedures: {total}")
+            price_item = QTableWidgetItem(f"${item['price']:.2f}")
+            price_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(i, 2, price_item)
+
+            subtotal = item["qty"] * item["price"]
+            subtotal_item = QTableWidgetItem(f"${subtotal:.2f}")
+            subtotal_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(i, 3, subtotal_item)
+
+            grand_total += subtotal
+
+        self.total_label.setText(f"Total: ${grand_total:.2f}")
 
         if not items:
             QMessageBox.information(
@@ -93,6 +101,11 @@ class InvoicingWidget(QWidget):
             self, "Save Invoice", f"invoice_{fac_name}.pdf", "PDF (*.pdf)"
         )
         if path:
-            generate_invoice_pdf(path, fac_name, start, end, items)
-            models.save_invoice(fac_id, start, end, total)
+            fac_details = models.get_facility(fac_id)
+            company_info = models.get_company_info()
+            generate_invoice_pdf(path, fac_name, start, end, items,
+                                 facility_details=fac_details,
+                                 company_info=company_info,
+                                 items_dated=items_dated)
+            models.save_invoice(fac_id, start, end, grand_total)
             QMessageBox.information(self, "Done", f"Invoice saved to:\n{path}")
