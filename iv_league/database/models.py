@@ -368,3 +368,43 @@ def get_invoice_items_dated(facility_id, start_date, end_date):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+SUPPLIES_MAP = {
+    "IV Insertion": "Supplies: IV",
+    "Midline Insertion": "Supplies: Midline",
+    "PICC Insertion": "Supplies: PICC",
+    "Port Access": "Supplies: Port Access",
+}
+
+
+def get_supplies_items(facility_id, start_date, end_date):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT t.name AS task_name,
+                  SUM(r.attempts - 1) AS extra_attempts
+           FROM records r
+           JOIN tasks t ON r.task_id = t.id
+           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
+             AND r.attempts > 1
+             AND t.name IN (?, ?, ?, ?)
+           GROUP BY t.name""",
+        (facility_id, start_date, end_date,
+         "IV Insertion", "Midline Insertion", "PICC Insertion", "Port Access"),
+    ).fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        parent_task = row["task_name"]
+        supplies_name = SUPPLIES_MAP.get(parent_task)
+        if supplies_name:
+            supplies_task_id = get_task_id(supplies_name)
+            price = get_price(supplies_task_id) if supplies_task_id else 0
+            result.append({
+                "task_name": supplies_name,
+                "qty": row["extra_attempts"],
+                "price": price,
+                "subtotal": row["extra_attempts"] * price,
+            })
+    return result

@@ -1,10 +1,23 @@
 import sqlite3
 import os
+import sys
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "iv_league.db")
+
+def _get_db_dir():
+    if getattr(sys, 'frozen', False):
+        if sys.platform == 'win32':
+            base = os.environ.get('APPDATA', os.path.expanduser('~'))
+        else:
+            base = os.path.expanduser('~')
+        return os.path.join(base, '.iv_league')
+    return os.path.dirname(__file__)
+
+
+DB_PATH = os.path.join(_get_db_dir(), "iv_league.db")
 
 
 def get_connection():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -101,6 +114,10 @@ def init_db():
         "Blood Draw",
         "Troubleshoot",
         "Port Access",
+        "Supplies: IV",
+        "Supplies: Midline",
+        "Supplies: PICC",
+        "Supplies: Port Access",
     ]
     for task in default_tasks:
         cursor.execute(

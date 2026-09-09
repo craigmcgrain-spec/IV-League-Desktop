@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
         self.clinician_dir = ClinicianDirectoryWidget()
         self.pricing = PricingWidget()
         self.facility_dir.facility_added.connect(self.data_entry.refresh_facilities)
+        self.facility_dir.facility_added.connect(self.invoicing.refresh_facilities)
         self.clinician_dir.clinician_added.connect(self.data_entry.refresh_clinicians)
 
         tabs.addTab(self.data_entry, "Data Entry")

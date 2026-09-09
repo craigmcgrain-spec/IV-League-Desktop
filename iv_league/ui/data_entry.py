@@ -25,7 +25,7 @@ LOCATION_OPTIONS = {
     "Midline Insertion": ["AC", "Upper Arm"],
     "PICC Insertion": ["Brachial", "Cephalic"],
     "Dressing Change": ["AC", "Forearm", "Wrist", "Hand"],
-    "Blood Draw": [],
+    "Blood Draw": ["Upper Arm", "AC", "Forearm", "Wrist", "Hand"],
     "Troubleshoot": [],
 }
 

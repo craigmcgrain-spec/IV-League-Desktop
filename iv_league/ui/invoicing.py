@@ -58,6 +58,17 @@ class InvoicingWidget(QWidget):
         for f in models.get_all_facilities():
             self.facility_combo.addItem(f["name"], f["id"])
 
+    def refresh_facilities(self):
+        current = self.facility_combo.currentData()
+        self.facility_combo.clear()
+        for f in models.get_all_facilities():
+            self.facility_combo.addItem(f["name"], f["id"])
+        if current:
+            for i in range(self.facility_combo.count()):
+                if self.facility_combo.itemData(i) == current:
+                    self.facility_combo.setCurrentIndex(i)
+                    break
+
     def _generate(self):
         fac_id = self.facility_combo.currentData()
         fac_name = self.facility_combo.currentText()
@@ -69,11 +80,13 @@ class InvoicingWidget(QWidget):
             return
 
         items = models.get_invoice_records_priced(fac_id, start, end)
+        supplies = models.get_supplies_items(fac_id, start, end)
+        all_items = items + supplies
         items_dated = models.get_invoice_items_dated(fac_id, start, end)
 
-        self.table.setRowCount(len(items))
+        self.table.setRowCount(len(all_items))
         grand_total = 0
-        for i, item in enumerate(items):
+        for i, item in enumerate(all_items):
             self.table.setItem(i, 0, QTableWidgetItem(item["task_name"]))
             self.table.setItem(i, 1, QTableWidgetItem(str(item["qty"])))
 
@@ -90,7 +103,7 @@ class InvoicingWidget(QWidget):
 
         self.total_label.setText(f"Total: ${grand_total:.2f}")
 
-        if not items:
+        if not all_items:
             QMessageBox.information(
                 self, "No Data",
                 "No records found for the selected criteria."
@@ -103,7 +116,7 @@ class InvoicingWidget(QWidget):
         if path:
             fac_details = models.get_facility(fac_id)
             company_info = models.get_company_info()
-            generate_invoice_pdf(path, fac_name, start, end, items,
+            generate_invoice_pdf(path, fac_name, start, end, all_items,
                                  facility_details=fac_details,
                                  company_info=company_info,
                                  items_dated=items_dated)
