@@ -233,6 +233,46 @@ def delete_record(record_id):
     conn.close()
 
 
+def get_record_by_id(record_id):
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT r.*, c.name AS client_name, f.name AS facility_name,
+                  t.name AS task_name
+           FROM records r
+           JOIN clients c ON r.client_id = c.id
+           JOIN facilities f ON r.facility_id = f.id
+           JOIN tasks t ON r.task_id = t.id
+           WHERE r.id = ?""",
+        (record_id,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+
+def update_record(record_id, client_id, facility_id, task_id, date, time,
+                  gauge=None, side=None, location=None, notes=None,
+                  clinician_name=None, clinician_credentials=None,
+                  attempts=None, cap_change=None):
+    conn = get_connection()
+    conn.execute(
+        """UPDATE records SET
+            client_id = ?, facility_id = ?, task_id = ?,
+            date = ?, time = ?, gauge = ?, side = ?, location = ?,
+            notes = ?, clinician_name = ?, clinician_credentials = ?,
+            attempts = ?, cap_change = ?
+            WHERE id = ?""",
+        (client_id, facility_id, task_id,
+         date, time, gauge, side, location, notes,
+         clinician_name, clinician_cred,
+         attempts, cap_change,
+         record_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Invoices
 # ---------------------------------------------------------------------------

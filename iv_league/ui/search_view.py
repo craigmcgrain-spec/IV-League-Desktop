@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox,
     QDateEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QMessageBox, QHeaderView, QGroupBox
+    QMessageBox, QHeaderView, QGroupBox, QMenu
 )
 from PyQt6.QtCore import QDate, Qt, QSettings
 from ..database import models
@@ -54,7 +54,7 @@ class SearchViewWidget(QWidget):
         btn_row.addWidget(self.delete_btn)
         root.addLayout(btn_row)
 
-        # -- Table --
+# -- Table --
         self.table = QTableWidget()
         self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
@@ -65,6 +65,8 @@ class SearchViewWidget(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
         self._settings = QSettings("IVLeague", "Desktop")
         self._load_column_widths()
         header.sectionResized.connect(self._save_column_widths)
@@ -137,4 +139,42 @@ class SearchViewWidget(QWidget):
                     Qt.ItemDataRole.UserRole
                 )
                 models.delete_record(record_id)
+            self._refresh()
+
+    def _show_context_menu(self, position):
+        indexes = self.table.selectedIndexes()
+        if not indexes:
+            return
+        
+        menu = QMenu()
+        edit_action = menu.addAction("Edit Record")
+        delete_action = menu.addAction("Delete Record")
+        
+        action = menu.exec(self.table.viewport().mapToGlobal(position))
+        
+        if action == edit_action:
+            self._edit_selected()
+        elif action == delete_action:
+            self._delete_selected()
+
+    def _edit_selected(self):
+        rows = self.table.selectionModel().selectedRows()
+        if not rows:
+            return
+        
+        # Get the first selected record (we'll edit one at a time for simplicity)
+        row = rows[0].row()
+        record_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        
+        # Get the full record data
+        record = models.get_record_by_id(record_id)
+        if not record:
+            QMessageBox.warning(self, "Error", "Could not load record data.")
+            return
+        
+        # Open edit dialog
+        from .edit_record_dialog import EditRecordDialog
+        dialog = EditRecordDialog(record, self)
+        if dialog.exec():
+            # Refresh the search results
             self._refresh()

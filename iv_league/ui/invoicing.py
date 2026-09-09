@@ -81,12 +81,38 @@ class InvoicingWidget(QWidget):
 
         items = models.get_invoice_records_priced(fac_id, start, end)
         supplies = models.get_supplies_items(fac_id, start, end)
-        all_items = items + supplies
         items_dated = models.get_invoice_items_dated(fac_id, start, end)
+        
+        # Create a map of supplies items by parent task name for easy lookup
+        supplies_by_parent = {}
+        REVERSE_SUPPLIES_MAP = {
+            "Supplies: IV": "IV Insertion",
+            "Supplies: Midline": "Midline Insertion",
+            "Supplies: PICC": "PICC Insertion",
+            "Supplies: Port Access": "Port Access",
+        }
+        for supply in supplies:
+            parent_task = REVERSE_SUPPLIES_MAP.get(supply["task_name"])
+            if parent_task:
+                supplies_by_parent[parent_task] = supply
 
-        self.table.setRowCount(len(all_items))
+        # Get unique parent task names from regular items, sorted
+        parent_task_names = sorted(list(set(item["task_name"] for item in items)))
+        
+        # Build display list: for each parent task, add the parent then its supplies (if any)
+        display_items = []
+        for parent_task in parent_task_names:
+            # Add the parent task item
+            parent_item = next((item for item in items if item["task_name"] == parent_task), None)
+            if parent_item:
+                display_items.append(parent_item)
+                # Add supplies item if it exists for this parent
+                if parent_task in supplies_by_parent:
+                    display_items.append(supplies_by_parent[parent_task])
+
+        self.table.setRowCount(len(display_items))
         grand_total = 0
-        for i, item in enumerate(all_items):
+        for i, item in enumerate(display_items):
             self.table.setItem(i, 0, QTableWidgetItem(item["task_name"]))
             self.table.setItem(i, 1, QTableWidgetItem(str(item["qty"])))
 
@@ -103,7 +129,7 @@ class InvoicingWidget(QWidget):
 
         self.total_label.setText(f"Total: ${grand_total:.2f}")
 
-        if not all_items:
+        if not display_items:
             QMessageBox.information(
                 self, "No Data",
                 "No records found for the selected criteria."
@@ -116,7 +142,7 @@ class InvoicingWidget(QWidget):
         if path:
             fac_details = models.get_facility(fac_id)
             company_info = models.get_company_info()
-            generate_invoice_pdf(path, fac_name, start, end, all_items,
+            generate_invoice_pdf(path, fac_name, start, end, display_items,
                                  facility_details=fac_details,
                                  company_info=company_info,
                                  items_dated=items_dated)

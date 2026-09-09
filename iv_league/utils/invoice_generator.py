@@ -164,7 +164,10 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
     row_y = table_y - 20
     for i, item in enumerate(items):
         subtotal = item["qty"] * item["price"]
-        _draw_text(c, margin, row_y, item["task_name"], "Helvetica", 10, TEXT)
+        # Check if this is a supplies item (indented under parent)
+        is_supplies = item["task_name"].startswith("Supplies: ")
+        text_x = margin + (20 if is_supplies else 0)  # Indent supplies items
+        _draw_text(c, text_x, row_y, item["task_name"], "Helvetica", 10, TEXT)
         _draw_right_text(c, WIDTH - margin - 220, row_y, str(item["qty"]), "Helvetica", 10, TEXT)
         _draw_right_text(c, WIDTH - margin - 150, row_y, f"${item['price']:.2f}", "Helvetica", 10, TEXT)
         _draw_right_text(c, WIDTH - margin - 60, row_y, f"${subtotal:.2f}", "Helvetica", 10, TEXT)
