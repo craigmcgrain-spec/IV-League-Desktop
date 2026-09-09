@@ -20,42 +20,17 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyinstaller PyQt6 reportlab cairosvg pillow
+          sudo apt-get update && sudo apt-get install -y libfuse2
 
-      - name: Convert SVG to ICO
+      - name: Build with PyInstaller
         run: |
-          python3 << 'EOF'
-          import cairosvg
-          from PIL import Image
-          import io
-
-          svg_path = "iv_league/assets/icon.svg"
-          ico_path = "iv_league/assets/icon.ico"
-
-          sizes = [16, 24, 32, 48, 64, 128, 256]
-          images = []
-          for size in sizes:
-              png_data = cairosvg.svg2png(url=svg_path, output_width=size, output_height=size)
-              img = Image.open(io.BytesIO(png_data)).convert('RGBA')
-              images.append(img)
-
-          base = images[-1]
-          base.save(ico_path, format='ICO', sizes=[(s, s) for s in sizes], append_images=images[:-1])
-          print(f"Created {ico_path}")
-          EOF
-
-      - name: Build AppImage
-        run: |
-          # Download appimagetool
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-
-          # Build with PyInstaller
           pyinstaller --onefile --windowed --name IVLeague \
             --add-data "iv_league/assets:iv_league/assets" \
             --add-data "iv_league/database:iv_league/database" \
             --clean main.py
 
-          # Create AppDir
+      - name: Create AppImage
+        run: |
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
           cp dist/IVLeague AppDir/usr/bin/iv-league
           chmod +x AppDir/usr/bin/iv-league
@@ -75,7 +50,8 @@ jobs:
           cp iv_league/assets/icon.svg AppDir/usr/share/icons/hicolor/256x256/apps/iv-league.svg
           cp iv_league/assets/icon.svg AppDir/iv-league.svg
 
-          # Build AppImage
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir IVLeague-${{ github.ref_name }}-x86_64.AppImage
 
       - name: Upload Linux artifact
@@ -98,12 +74,8 @@ jobs:
         run: pip install pyinstaller PyQt6 reportlab
 
       - name: Build executable
-        run: |
-          pyinstaller --onefile --windowed --name IVLeague ^
-            --icon iv_league\assets\icon.ico ^
-            --add-data "iv_league\assets;iv_league\assets" ^
-            --add-data "iv_league\database;iv_league\database" ^
-            --clean main.py
+        run: pyinstaller --onefile --windowed --name IVLeague --icon iv_league/assets/icon.ico --add-data "iv_league/assets;iv_league/assets" --add-data "iv_league/database;iv_league/database" --clean main.py
+        shell: cmd
 
       - name: Build installer with Inno Setup
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
