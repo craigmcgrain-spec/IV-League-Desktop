@@ -2,7 +2,8 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QComboBox, QLineEdit, QDateEdit,
     QGroupBox, QHBoxLayout, QPushButton, QMessageBox, QLabel
 )
-from PyQt6.QtCore import QDate, QTime, Qt
+from PyQt6.QtCore import QDate, QTime, Qt, QRegularExpression
+from PyQt6.QtGui import QRegularExpressionValidator
 from ..database import models
 
 
@@ -174,15 +175,19 @@ class EditRecordDialog(QDialog):
         # Load clinicians
         self.clinician_combo.clear()
         clinicians = models.get_all_clinicians()
+        record_clinician_name = (self.record_data.get("clinician_name") or "").strip()
         default_index = 0
+        matched_index = None
         for i, c in enumerate(clinicians):
             display = f"{c['name']}, {c['credentials']}" if c["credentials"] else c["name"]
             self.clinician_combo.addItem(display, c["id"])
             if c["is_default"]:
                 default_index = i
-            if c["id"] == self.record_data.get("clinician_id"):
-                self.clinician_combo.setCurrentIndex(i)
-        self.clinician_combo.setCurrentIndex(default_index)
+            if c["name"] != "Select Clinician" and c["name"] == record_clinician_name:
+                matched_index = i
+        self.clinician_combo.setCurrentIndex(
+            matched_index if matched_index is not None else default_index
+        )
 
         # Load date and time
         if self.record_data["date"]:
@@ -255,66 +260,72 @@ class EditRecordDialog(QDialog):
         self.notes_edit.setText(self.record_data.get("notes", ""))
 
     def _update_record(self):
-        facility_name = self.facility_combo.currentText().strip()
-        client_name = self.name_edit.text().strip()
-        date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        time_str = self.time_edit.text().strip()
-        task_name = self.task_combo.currentText()
+        try:
+            facility_name = self.facility_combo.currentText().strip()
+            client_name = self.name_edit.text().strip()
+            date_str = self.date_edit.date().toString("yyyy-MM-dd")
+            time_str = self.time_edit.text().strip()
+            task_name = self.task_combo.currentText()
 
-        if not facility_name:
-            QMessageBox.warning(self, "Error", "Facility is required.")
-            return
-        if not client_name:
-            QMessageBox.warning(self, "Error", "Client name is required.")
-            return
-        if not time_str:
-            QMessageBox.warning(self, "Error", "Time is required.")
-            return
+            if not facility_name:
+                QMessageBox.warning(self, "Error", "Facility is required.")
+                return
+            if not client_name:
+                QMessageBox.warning(self, "Error", "Client name is required.")
+                return
+            if not time_str:
+                QMessageBox.warning(self, "Error", "Time is required.")
+                return
 
-        # Get or create facility
-        models.add_facility(facility_name)
-        facility_id = models.get_facility_id(facility_name)
-        
-        # Get or create client (link to facility)
-        client_id = models.get_or_create_client(client_name, facility_id)
-        
-        # Get task ID
-        task_id = models.get_task_id(task_name)
-        
-        # Get other fields
-        gauge = self.gauge_combo.currentText() or None
-        side = self.side_combo.currentText() or None
-        location = self.loc_combo.currentText() or None
-        notes = self.notes_edit.text().strip() or None
-        
-        attempts_text = self.attempts_edit.text().strip()
-        attempts = int(attempts_text) if attempts_text.isdigit() else None
-        
-        cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
-        
-        # Get clinician info
-        clinician_id = self.clinician_combo.currentData()
-        clinician_name = None
-        clinician_cred = None
-        if clinician_id:
-            clinicians = models.get_all_clinicians()
-            for c in clinicians:
-                if c["id"] == clinician_id:
-                    clinician_name = c["name"]
-                    clinician_cred = c["credentials"]
-                    break
+            # Get or create facility
+            models.add_facility(facility_name)
+            facility_id = models.get_facility_id(facility_name)
+            
+            # Get or create client (link to facility)
+            client_id = models.get_or_create_client(client_name, facility_id)
+            
+            # Get task ID
+            task_id = models.get_task_id(task_name)
+            
+            # Get other fields
+            gauge = self.gauge_combo.currentText() or None
+            side = self.side_combo.currentText() or None
+            location = self.loc_combo.currentText() or None
+            notes = self.notes_edit.text().strip() or None
+             
+            attempts_text = self.attempts_edit.text().strip()
+            attempts = int(attempts_text) if attempts_text.isdigit() else None
+             
+            cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
+             
+            # Get clinician info
+            clinician_id = self.clinician_combo.currentData()
+            clinician_name = None
+            clinician_credentials = None
+            if clinician_id is not None:
+                clinicians = models.get_all_clinicians()
+                # Find the clinician with the matching ID
+                clinician = next((c for c in clinicians if c["id"] == clinician_id), None)
+                if clinician:
+                    clinician_name = clinician["name"]
+                    clinician_credentials = clinician["credentials"]
 
-        # Update the record
-        models.update_record(
-            self.record_data["id"],
-            client_id, facility_id, task_id,
-            date_str, time_str, gauge, side, location, notes,
-            clinician_name, clinician_cred,
-            attempts, cap_change
-        )
-        
-        QMessageBox.information(self, "Success", "Record updated successfully.")
-        self.accept()
+            # Update the record
+            models.update_record(
+                self.record_data["id"],
+                client_id, facility_id, task_id,
+                date_str, time_str, gauge, side, location, notes,
+                clinician_name, clinician_credentials,
+                attempts, cap_change
+            )
+            
+            QMessageBox.information(self, "Success", "Record updated successfully.")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while updating the record:\n{str(e)}")
+            print(f"Error in _update_record: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _delete_record(self):
         reply = QMessageBox.question(

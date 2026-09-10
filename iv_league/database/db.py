@@ -130,6 +130,11 @@ def init_db():
     )
 
     cursor.execute(
+        "DELETE FROM clinicians WHERE name = 'Select Clinician' AND id NOT IN ("
+        "SELECT MIN(id) FROM clinicians WHERE name = 'Select Clinician')"
+    )
+
+    cursor.execute(
         "UPDATE clinicians SET is_default = 1 WHERE name = 'Select Clinician' "
         "AND NOT EXISTS (SELECT 1 FROM clinicians WHERE is_default = 1 AND name != 'Select Clinician')"
     )

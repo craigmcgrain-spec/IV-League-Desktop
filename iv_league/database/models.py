@@ -90,6 +90,13 @@ def get_all_clinicians():
 
 def add_clinician(name, credentials, is_default=0):
     conn = get_connection()
+    existing = conn.execute(
+        "SELECT id FROM clinicians WHERE name = ? AND credentials = ?",
+        (name, credentials),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return
     conn.execute(
         "INSERT INTO clinicians (name, credentials, is_default) VALUES (?, ?, ?)",
         (name, credentials, is_default),
@@ -252,9 +259,9 @@ def get_record_by_id(record_id):
 
 
 def update_record(record_id, client_id, facility_id, task_id, date, time,
-                  gauge=None, side=None, location=None, notes=None,
-                  clinician_name=None, clinician_credentials=None,
-                  attempts=None, cap_change=None):
+                   gauge=None, side=None, location=None, notes=None,
+                   clinician_name=None, clinician_credentials=None,
+                   attempts=None, cap_change=None):
     conn = get_connection()
     conn.execute(
         """UPDATE records SET
@@ -265,7 +272,7 @@ def update_record(record_id, client_id, facility_id, task_id, date, time,
             WHERE id = ?""",
         (client_id, facility_id, task_id,
          date, time, gauge, side, location, notes,
-         clinician_name, clinician_cred,
+         clinician_name, clinician_credentials,
          attempts, cap_change,
          record_id)
     )

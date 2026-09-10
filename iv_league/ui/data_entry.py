@@ -18,7 +18,9 @@ TASK_OPTIONS = {
     "Troubleshoot": [],
 }
 
+
 SIDE_OPTIONS = ["Right", "Left"]
+
 
 LOCATION_OPTIONS = {
     "IV Insertion": ["AC", "Forearm", "Wrist", "Hand"],
@@ -241,20 +243,20 @@ class DataEntryWidget(QWidget):
 
         clinician_id = self.clinician_combo.currentData()
         clinician_name = None
-        clinician_cred = None
+        clinician_credentials = None
         if clinician_id:
             clinicians = models.get_all_clinicians()
             for c in clinicians:
                 if c["id"] == clinician_id:
                     clinician_name = c["name"]
-                    clinician_cred = c["credentials"]
+                    clinician_credentials = c["credentials"]
                     break
 
         models.add_record(
             client_id, facility_id, task_id,
             date_str, time_str,
             gauge, side, location, notes,
-            clinician_name, clinician_cred,
+            clinician_name, clinician_credentials,
             attempts, cap_change,
         )
 
