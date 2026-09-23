@@ -71,13 +71,18 @@ class FacilityDirectoryWidget(QWidget):
         detail_group.setLayout(detail_form)
         layout.addWidget(detail_group)
 
-        # -- Save button --
+        # -- Save/Delete buttons --
         btn_row = QHBoxLayout()
         self.save_btn = QPushButton("Save Details")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self._save_details)
+        self.delete_btn = QPushButton("Delete Selected")
+        self.delete_btn.setStyleSheet("background-color: #f44336; color: white;")
+        self.delete_btn.setEnabled(False)
+        self.delete_btn.clicked.connect(self._delete_selected)
         btn_row.addStretch()
         btn_row.addWidget(self.save_btn)
+        btn_row.addWidget(self.delete_btn)
         layout.addLayout(btn_row)
 
         self._selected_id = None
@@ -104,6 +109,7 @@ class FacilityDirectoryWidget(QWidget):
         self.detail_contact.setText(fac.get("contact_name") or "")
         self.detail_email.setText(fac.get("contact_email") or "")
         self.save_btn.setEnabled(True)
+        self.delete_btn.setEnabled(True)
 
     def _save_details(self):
         if not self._selected_id:
@@ -136,3 +142,33 @@ class FacilityDirectoryWidget(QWidget):
         self.name_edit.clear()
         self._refresh()
         self.facility_added.emit()
+
+    def _delete_selected(self):
+        if not self._selected_id:
+            return
+        
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Are you sure you want to delete this facility?\n\n"
+            "This will only work if the facility has no linked records.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            success, message = models.delete_facility(self._selected_id)
+            if success:
+                self._selected_id = None
+                self.save_btn.setEnabled(False)
+                self.delete_btn.setEnabled(False)
+                self.detail_name.clear()
+                self.detail_street.clear()
+                self.detail_city.clear()
+                self.detail_zip.clear()
+                self.detail_phone.clear()
+                self.detail_contact.clear()
+                self.detail_email.clear()
+                self._refresh()
+                self.facility_added.emit()
+                QMessageBox.information(self, "Deleted", message)
+            else:
+                QMessageBox.warning(self, "Cannot Delete", message)

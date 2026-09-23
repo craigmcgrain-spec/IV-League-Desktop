@@ -69,6 +69,10 @@ class InvoicingWidget(QWidget):
                     self.facility_combo.setCurrentIndex(i)
                     break
 
+    def _refresh_pricing(self):
+        """Reload pricing data from database (called when prices are updated)."""
+        pass  # Pricing is loaded dynamically in _generate, no UI table to refresh
+
     def _generate(self):
         fac_id = self.facility_combo.currentData()
         fac_name = self.facility_combo.currentText()
@@ -143,8 +147,9 @@ class InvoicingWidget(QWidget):
             fac_details = models.get_facility(fac_id)
             company_info = models.get_company_info()
             generate_invoice_pdf(path, fac_name, start, end, display_items,
-                                 facility_details=fac_details,
-                                 company_info=company_info,
-                                 items_dated=items_dated)
+                                  facility_details=fac_details,
+                                  company_info=company_info,
+                                  items_dated=items_dated,
+                                  supplies=supplies)
             models.save_invoice(fac_id, start, end, grand_total)
             QMessageBox.information(self, "Done", f"Invoice saved to:\n{path}")

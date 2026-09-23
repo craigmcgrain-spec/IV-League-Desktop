@@ -8,7 +8,6 @@ from .db import get_connection
 def get_all_facilities():
     conn = get_connection()
     rows = conn.execute("SELECT * FROM facilities ORDER BY name").fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -16,7 +15,6 @@ def add_facility(name):
     conn = get_connection()
     conn.execute("INSERT OR IGNORE INTO facilities (name) VALUES (?)", (name,))
     conn.commit()
-    conn.close()
 
 
 def get_facility_id(name):
@@ -24,7 +22,6 @@ def get_facility_id(name):
     row = conn.execute(
         "SELECT id FROM facilities WHERE name = ?", (name,)
     ).fetchone()
-    conn.close()
     return row["id"] if row else None
 
 
@@ -33,8 +30,33 @@ def get_facility(facility_id):
     row = conn.execute(
         "SELECT * FROM facilities WHERE id = ?", (facility_id,)
     ).fetchone()
-    conn.close()
     return dict(row) if row else None
+
+
+def facility_has_records(facility_id):
+    """Check if a facility has any records linked to it."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT COUNT(*) as count FROM records WHERE facility_id = ?", (facility_id,)
+    ).fetchone()
+    return row["count"] > 0
+
+
+def delete_facility(facility_id):
+    """Delete a facility only if it has no linked records."""
+    if facility_has_records(facility_id):
+        return False, "Cannot delete facility with existing records."
+    
+    conn = get_connection()
+    conn.execute("DELETE FROM facilities WHERE id = ?", (facility_id,))
+    conn.commit()
+    return True, "Facility deleted successfully."
+
+
+_ALLOWED_FACILITY_COLUMNS = frozenset({
+    "name", "address", "phone", "contact_name", "contact_email",
+    "street", "city", "zip",
+})
 
 
 def update_facility(facility_id, name=None, address=None, phone=None,
@@ -74,7 +96,6 @@ def update_facility(facility_id, name=None, address=None, phone=None,
             values,
         )
         conn.commit()
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +105,6 @@ def update_facility(facility_id, name=None, address=None, phone=None,
 def get_all_clinicians():
     conn = get_connection()
     rows = conn.execute("SELECT * FROM clinicians ORDER BY is_default DESC, name").fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -95,14 +115,12 @@ def add_clinician(name, credentials, is_default=0):
         (name, credentials),
     ).fetchone()
     if existing:
-        conn.close()
         return
     conn.execute(
         "INSERT INTO clinicians (name, credentials, is_default) VALUES (?, ?, ?)",
         (name, credentials, is_default),
     )
     conn.commit()
-    conn.close()
 
 
 def get_clinician_id(name):
@@ -110,7 +128,6 @@ def get_clinician_id(name):
     row = conn.execute(
         "SELECT id FROM clinicians WHERE name = ?", (name,)
     ).fetchone()
-    conn.close()
     return row["id"] if row else None
 
 
@@ -121,7 +138,6 @@ def set_default_clinician(clinician_id):
         (clinician_id,),
     )
     conn.commit()
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +159,6 @@ def get_or_create_client(name, facility_id, dob=None, mrn=None, room=None):
         )
         client_id = cur.lastrowid
     conn.commit()
-    conn.close()
     return client_id
 
 
@@ -154,7 +169,6 @@ def get_or_create_client(name, facility_id, dob=None, mrn=None, room=None):
 def get_all_tasks():
     conn = get_connection()
     rows = conn.execute("SELECT * FROM tasks ORDER BY name").fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -163,7 +177,6 @@ def get_task_id(name):
     row = conn.execute(
         "SELECT id FROM tasks WHERE name = ?", (name,)
     ).fetchone()
-    conn.close()
     return row["id"] if row else None
 
 
@@ -179,7 +192,6 @@ def record_exists(client_id, facility_id, task_id, date, time):
            AND date = ? AND time = ?""",
         (client_id, facility_id, task_id, date, time),
     ).fetchone()
-    conn.close()
     return row is not None
 
 
@@ -197,7 +209,6 @@ def add_record(client_id, facility_id, task_id, date, time,
          notes, clinician_name, clinician_credentials, attempts, cap_change),
     )
     conn.commit()
-    conn.close()
 
 
 def search_records(facility_id=None, start_date=None, end_date=None,
@@ -229,7 +240,6 @@ def search_records(facility_id=None, start_date=None, end_date=None,
 
     query += " ORDER BY r.date DESC, r.time DESC"
     rows = conn.execute(query, params).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -237,7 +247,6 @@ def delete_record(record_id):
     conn = get_connection()
     conn.execute("DELETE FROM records WHERE id = ?", (record_id,))
     conn.commit()
-    conn.close()
 
 
 def get_record_by_id(record_id):
@@ -252,7 +261,6 @@ def get_record_by_id(record_id):
            WHERE r.id = ?""",
         (record_id,)
     ).fetchone()
-    conn.close()
     if row:
         return dict(row)
     return None
@@ -277,7 +285,6 @@ def update_record(record_id, client_id, facility_id, task_id, date, time,
          record_id)
     )
     conn.commit()
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +301,6 @@ def get_invoice_records(facility_id, start_date, end_date):
            GROUP BY t.name""",
         (facility_id, start_date, end_date),
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -305,7 +311,6 @@ def save_invoice(facility_id, start_date, end_date, total):
         (facility_id, start_date, end_date, total),
     )
     conn.commit()
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +320,6 @@ def save_invoice(facility_id, start_date, end_date, total):
 def get_company_info():
     conn = get_connection()
     row = conn.execute("SELECT * FROM company_info WHERE id = 1").fetchone()
-    conn.close()
     if row:
         return dict(row)
     return {
@@ -345,7 +349,6 @@ def save_company_info(info):
         ),
     )
     conn.commit()
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +363,6 @@ def get_all_pricing():
            JOIN tasks t ON p.task_id = t.id
            ORDER BY t.name"""
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -369,7 +371,6 @@ def get_price(task_id):
     row = conn.execute(
         "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
     ).fetchone()
-    conn.close()
     return row["price"] if row else 0
 
 
@@ -380,7 +381,6 @@ def set_price(task_id, price):
         (task_id, price),
     )
     conn.commit()
-    conn.close()
 
 
 def get_invoice_records_priced(facility_id, start_date, end_date):
@@ -396,7 +396,6 @@ def get_invoice_records_priced(facility_id, start_date, end_date):
            GROUP BY t.name""",
         (facility_id, start_date, end_date),
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -413,7 +412,6 @@ def get_invoice_items_dated(facility_id, start_date, end_date):
            ORDER BY r.date, r.time""",
         (facility_id, start_date, end_date),
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -439,7 +437,6 @@ def get_supplies_items(facility_id, start_date, end_date):
         (facility_id, start_date, end_date,
          "IV Insertion", "Midline Insertion", "PICC Insertion", "Port Access"),
     ).fetchall()
-    conn.close()
 
     result = []
     for row in rows:

@@ -2,6 +2,7 @@ from PyQt6.QtCore import QObject, QTimer
 import datetime
 from ..database import backup, settings
 
+
 class BackupScheduler(QObject):
     def __init__(self, interval_minutes=1440, parent=None):
         super().__init__(parent)
@@ -9,15 +10,16 @@ class BackupScheduler(QObject):
         self.timer = QTimer(self)
         self.timer.setInterval(self.interval_ms)
         self.timer.timeout.connect(self.run_backup)
-        enabled = bool(settings.get("backup_automatic", False))
-        if enabled:
-            self.timer.start()
+        # Timer is not started here; MainWindow controls lifecycle
 
     def run_backup(self):
         try:
             backup.create_backup()
-        except Exception:
-            pass
+            settings.set_value("backup_last_run", datetime.datetime.now().timestamp())
+        except Exception as e:
+            # Log error silently - in a full app, this would use proper logging
+            import sys
+            print(f"Backup scheduler error: {e}", file=sys.stderr)
 
     def set_interval_minutes(self, minutes):
         from ..database import settings

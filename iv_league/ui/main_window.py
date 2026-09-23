@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("IV League")
         self.setMinimumSize(900, 600)
-        self.setWindowIcon(QIcon(os.path.join(_ASSETS, "icon.svg")))
+        self.setWindowIcon(QIcon(os.path.join(_ASSETS, "icon.png")))
 
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
@@ -61,12 +61,10 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         interval = int(settings.get("backup_interval_minutes", 60*24))
         enabled = bool(settings.get("backup_automatic", False))
+        self.backup_scheduler = BackupScheduler(interval_minutes=interval)
         if enabled:
-            self.backup_scheduler = BackupScheduler(interval_minutes=interval)
             settings.set_value("backup_last_run", 0)
-        else:
-            self.backup_scheduler = BackupScheduler(interval_minutes=interval)
-            self.backup_scheduler.timer.stop()
+            self.backup_scheduler.set_enabled(True)
 
         tabs = QTabWidget()
         self.setCentralWidget(tabs)
@@ -80,6 +78,7 @@ class MainWindow(QMainWindow):
         self.facility_dir.facility_added.connect(self.data_entry.refresh_facilities)
         self.facility_dir.facility_added.connect(self.invoicing.refresh_facilities)
         self.clinician_dir.clinician_added.connect(self.data_entry.refresh_clinicians)
+        self.pricing.pricing_changed.connect(self.invoicing._refresh_pricing)
 
         tabs.addTab(self.data_entry, "Data Entry")
         tabs.addTab(self.search_view, "Search Records")
@@ -92,7 +91,19 @@ class MainWindow(QMainWindow):
 
     def open_csv_import(self):
         dlg = CsvImportDialog(self)
+        dlg.import_complete.connect(self._on_csv_import_complete)
+        dlg.clinicians_refreshed.connect(self._on_clinicians_refreshed)
         dlg.exec()
+
+    def _on_csv_import_complete(self):
+        self.data_entry.refresh_facilities()
+        self.search_view._load_facilities()
+        self.invoicing.refresh_facilities()
+        self.facility_dir._refresh()
+
+    def _on_clinicians_refreshed(self):
+        self.clinician_dir._refresh()
+        self.data_entry.refresh_clinicians()
 
     def open_company_info(self):
         dlg = CompanyInfoDialog(self)

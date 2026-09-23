@@ -4,7 +4,7 @@ set -e
 
 APP_NAME="IVLeague"
 APP_DIR="AppDir"
-VERSION="1.01"
+VERSION="1.02"
 
 echo "Building IV League Desktop v${VERSION} AppImage..."
 
@@ -43,7 +43,9 @@ Type=Application
 Categories=Utility;
 EOF
 
-# Copy icon
+# Copy icon (PNG is the runtime icon; keep SVG for compatibility)
+cp iv_league/assets/icon.png ${APP_DIR}/usr/share/icons/hicolor/256x256/apps/iv-league.png
+cp iv_league/assets/icon.png ${APP_DIR}/iv-league.png
 cp iv_league/assets/icon.svg ${APP_DIR}/usr/share/icons/hicolor/256x256/apps/iv-league.svg
 cp iv_league/assets/icon.svg ${APP_DIR}/iv-league.svg
 

@@ -5,27 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, QTime, Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 from ..database import models
-
-
-TASK_OPTIONS = {
-    "IV Insertion": ["22ga", "24ga"],
-    "Midline Insertion": [],
-    "PICC Insertion": [],
-    "Dressing Change": [],
-    "Blood Draw": [],
-    "Troubleshoot": [],
-}
-
-SIDE_OPTIONS = ["Right", "Left"]
-
-LOCATION_OPTIONS = {
-    "IV Insertion": ["AC", "Forearm", "Wrist", "Hand"],
-    "Midline Insertion": ["AC", "Upper Arm"],
-    "PICC Insertion": ["Brachial", "Cephalic"],
-    "Dressing Change": ["AC", "Forearm", "Wrist", "Hand"],
-    "Blood Draw": ["Upper Arm", "AC", "Forearm", "Wrist", "Hand"],
-    "Troubleshoot": [],
-}
+from .constants import TASK_OPTIONS, SIDE_OPTIONS, LOCATION_OPTIONS
 
 
 class EditRecordDialog(QDialog):
@@ -335,10 +315,12 @@ class EditRecordDialog(QDialog):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            conn = models.get_connection()
-            conn.execute("DELETE FROM records WHERE id = ?", (self.record_data["id"],))
-            conn.commit()
-            conn.close()
-            
-            QMessageBox.information(self, "Success", "Record deleted successfully.")
-            self.accept()
+            try:
+                models.delete_record(self.record_data["id"])
+                QMessageBox.information(self, "Success", "Record deleted successfully.")
+                self.accept()
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Error",
+                    f"An error occurred while deleting the record:\n{str(e)}"
+                )

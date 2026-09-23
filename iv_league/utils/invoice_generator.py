@@ -56,7 +56,8 @@ def _draw_right_text(c, x, y, text, font="Helvetica", size=11, color=TEXT):
 
 
 def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
-                         facility_details=None, company_info=None, items_dated=None):
+                          facility_details=None, company_info=None, items_dated=None,
+                          supplies=None):
     c = canvas.Canvas(filepath, pagesize=letter)
 
     margin = 50
@@ -201,15 +202,15 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
 
     c.showPage()
 
-    if items_dated:
+    if items_dated or supplies:
         _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
-                            company_info, facility_details)
+                            company_info, facility_details, supplies)
 
     c.save()
 
 
 def _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
-                        company_info, facility_details):
+                        company_info, facility_details, supplies=None):
     margin = 50
     top = HEIGHT - 50
 
@@ -245,10 +246,26 @@ def _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
         _draw_right_text(c, WIDTH - margin, row_y, f"${item['price']:.2f}", "Helvetica", 9, TEXT)
         row_y -= 15
 
+    # Add supply items if any
+    if supplies:
+        for item in supplies:
+            if row_y < 80:
+                c.showPage()
+                top = HEIGHT - 50
+                row_y = top - 30
+
+            _draw_text(c, margin + 20, row_y, f"{item['task_name']} ({item['qty']}x)", "Helvetica", 9, TEXT)
+            _draw_right_text(c, WIDTH - margin, row_y, f"${item['subtotal']:.2f}", "Helvetica", 9, TEXT)
+            row_y -= 15
+
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.5)
     c.line(margin, row_y + 5, WIDTH - margin, row_y + 5)
 
-    grand_total = sum(item["price"] for item in items_dated)
+    # Calculate grand total consistently with summary page
+    itemized_total = sum(item["price"] for item in items_dated)
+    if supplies:
+        itemized_total += sum(item["subtotal"] for item in supplies)
+    
     _draw_right_text(c, WIDTH - margin, row_y - 10, "TOTAL", "Helvetica-Bold", 10, NAVY)
-    _draw_right_text(c, WIDTH - margin, row_y - 25, f"${grand_total:.2f}", "Helvetica-Bold", 12, NAVY)
+    _draw_right_text(c, WIDTH - margin, row_y - 25, f"${itemized_total:.2f}", "Helvetica-Bold", 12, NAVY)

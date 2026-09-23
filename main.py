@@ -1,33 +1,56 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(__file__))
-
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
-from iv_league.database.db import init_db
+from iv_league.database.db import init_db, close_connection
 from iv_league.ui.main_window import MainWindow
-
-BASE_DIR = os.path.dirname(__file__)
 
 
 def load_stylesheet():
-    path = os.path.join(BASE_DIR, "iv_league", "assets", "style.qss")
+    path = os.path.join(os.path.dirname(__file__), "iv_league", "assets", "style.qss")
     if os.path.exists(path):
         with open(path, "r") as f:
             return f.read()
+    print("Warning: Stylesheet not found at {path}", file=sys.stderr)
     return ""
 
 
+def validate_assets():
+    """Validate that required assets exist before starting the app."""
+    base = os.path.dirname(__file__)
+    assets = [
+        os.path.join(base, "iv_league", "assets", "icon.png"),
+        os.path.join(base, "iv_league", "assets", "style.qss"),
+    ]
+    missing = [a for a in assets if not os.path.exists(a)]
+    if missing:
+        print(f"Warning: Missing assets: {', '.join(os.path.basename(m) for m in missing)}",
+              file=sys.stderr)
+
+
 def main():
+    validate_assets()
     init_db()
+    
     app = QApplication(sys.argv)
     app.setApplicationName("IV League")
-    app.setWindowIcon(QIcon(os.path.join(BASE_DIR, "iv_league", "assets", "icon.svg")))
-    app.setStyleSheet(load_stylesheet())
+    
+    icon_path = os.path.join(os.path.dirname(__file__), "iv_league", "assets", "icon.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    
+    stylesheet = load_stylesheet()
+    if stylesheet:
+        app.setStyleSheet(stylesheet)
+    
     window = MainWindow()
     window.show()
-    sys.exit(app.exec())
+    
+    exit_code = sys.exit(app.exec())
+    
+    # Clean up database connection on exit
+    close_connection()
 
 
 if __name__ == "__main__":

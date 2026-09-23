@@ -6,30 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, QTime, Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 from ..database import models
-from ..database.db import init_db, get_connection
-
-
-TASK_OPTIONS = {
-    "IV Insertion": ["22ga", "24ga"],
-    "Midline Insertion": [],
-    "PICC Insertion": [],
-    "Dressing Change": [],
-    "Blood Draw": [],
-    "Troubleshoot": [],
-}
-
-
-SIDE_OPTIONS = ["Right", "Left"]
-
-
-LOCATION_OPTIONS = {
-    "IV Insertion": ["AC", "Forearm", "Wrist", "Hand"],
-    "Midline Insertion": ["AC", "Upper Arm"],
-    "PICC Insertion": ["Brachial", "Cephalic"],
-    "Dressing Change": ["AC", "Forearm", "Wrist", "Hand"],
-    "Blood Draw": ["Upper Arm", "AC", "Forearm", "Wrist", "Hand"],
-    "Troubleshoot": [],
-}
+from .constants import TASK_OPTIONS, SIDE_OPTIONS, LOCATION_OPTIONS
 
 
 class DataEntryWidget(QWidget):
@@ -39,6 +16,7 @@ class DataEntryWidget(QWidget):
         self.refresh_facilities()
         self.refresh_clinicians()
         self._refresh_tasks()
+        self._on_task_changed(self.task_combo.currentText())
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -162,7 +140,6 @@ class DataEntryWidget(QWidget):
         root.addLayout(btn_row)
 
         root.addStretch()
-        self._on_task_changed(self.task_combo.currentText())
 
     def refresh_facilities(self):
         names = [f["name"] for f in models.get_all_facilities()]
@@ -210,58 +187,71 @@ class DataEntryWidget(QWidget):
         self.notes_label.setVisible(is_troubleshoot)
 
     def _save(self):
-        facility_name = self.facility_combo.currentText().strip()
-        client_name = self.name_edit.text().strip()
-        date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        time_str = self.time_edit.text().strip()
-        task_name = self.task_combo.currentText()
+        try:
+            facility_name = self.facility_combo.currentText().strip()
+            client_name = self.name_edit.text().strip()
+            date_str = self.date_edit.date().toString("yyyy-MM-dd")
+            time_str = self.time_edit.text().strip()
+            task_name = self.task_combo.currentText()
 
-        if not facility_name:
-            QMessageBox.warning(self, "Error", "Facility is required.")
-            return
-        if not client_name:
-            QMessageBox.warning(self, "Error", "Client name is required.")
-            return
-        if not time_str:
-            QMessageBox.warning(self, "Error", "Time is required.")
-            return
+            if not facility_name:
+                QMessageBox.warning(self, "Error", "Facility is required.")
+                return
+            if not client_name:
+                QMessageBox.warning(self, "Error", "Client name is required.")
+                return
+            if not time_str:
+                QMessageBox.warning(self, "Error", "Time is required.")
+                return
 
-        models.add_facility(facility_name)
-        facility_id = models.get_facility_id(facility_name)
-        client_id = models.get_or_create_client(client_name, facility_id)
-        task_id = models.get_task_id(task_name)
+            models.add_facility(facility_name)
+            facility_id = models.get_facility_id(facility_name)
+            client_id = models.get_or_create_client(client_name, facility_id)
+            task_id = models.get_task_id(task_name)
 
-        gauge = self.gauge_combo.currentText() or None
-        side = self.side_combo.currentText() or None
-        location = self.loc_combo.currentText() or None
-        notes = self.notes_edit.text().strip() or None
+            if task_id is None:
+                QMessageBox.warning(
+                    self, "Error",
+                    f"Task '{task_name}' not found in database."
+                )
+                return
 
-        attempts_text = self.attempts_edit.text().strip()
-        attempts = int(attempts_text) if attempts_text.isdigit() else None
+            gauge = self.gauge_combo.currentText() or None
+            side = self.side_combo.currentText() or None
+            location = self.loc_combo.currentText() or None
+            notes = self.notes_edit.text().strip() or None
 
-        cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
+            attempts_text = self.attempts_edit.text().strip()
+            attempts = int(attempts_text) if attempts_text.isdigit() else None
 
-        clinician_id = self.clinician_combo.currentData()
-        clinician_name = None
-        clinician_credentials = None
-        if clinician_id:
-            clinicians = models.get_all_clinicians()
-            for c in clinicians:
-                if c["id"] == clinician_id:
-                    clinician_name = c["name"]
-                    clinician_credentials = c["credentials"]
-                    break
+            cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
 
-        models.add_record(
-            client_id, facility_id, task_id,
-            date_str, time_str,
-            gauge, side, location, notes,
-            clinician_name, clinician_credentials,
-            attempts, cap_change,
-        )
+            clinician_id = self.clinician_combo.currentData()
+            clinician_name = None
+            clinician_credentials = None
+            if clinician_id:
+                clinicians = models.get_all_clinicians()
+                for c in clinicians:
+                    if c["id"] == clinician_id:
+                        clinician_name = c["name"]
+                        clinician_credentials = c["credentials"]
+                        break
 
-        self.refresh_facilities()
-        QMessageBox.information(self, "Saved", "Record saved successfully.")
-        self.name_edit.clear()
-        self.notes_edit.clear()
-        self.attempts_edit.clear()
+            models.add_record(
+                client_id, facility_id, task_id,
+                date_str, time_str,
+                gauge, side, location, notes,
+                clinician_name, clinician_credentials,
+                attempts, cap_change,
+            )
+
+            self.refresh_facilities()
+            QMessageBox.information(self, "Saved", "Record saved successfully.")
+            self.name_edit.clear()
+            self.notes_edit.clear()
+            self.attempts_edit.clear()
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error",
+                f"An error occurred while saving the record:\n{str(e)}"
+            )

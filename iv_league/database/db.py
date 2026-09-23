@@ -3,25 +3,43 @@ import os
 import sys
 
 
-def _get_db_dir():
-    if getattr(sys, 'frozen', False):
-        if sys.platform == 'win32':
-            base = os.environ.get('APPDATA', os.path.expanduser('~'))
-        else:
-            base = os.path.expanduser('~')
-        return os.path.join(base, '.iv_league')
-    return os.path.dirname(__file__)
+DB_DIR = os.path.expanduser("~/.iv_league")
+DB_PATH = os.path.join(DB_DIR, "iv_league.db")
+
+_current_connection = None
 
 
-DB_PATH = os.path.join(_get_db_dir(), "iv_league.db")
+def _ensure_db_dir():
+    os.makedirs(DB_DIR, exist_ok=True)
 
 
 def get_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    """Get a database connection with WAL mode and foreign keys enabled.
+    
+    Uses a module-level singleton connection for thread safety and performance.
+    """
+    global _current_connection
+    
+    if _current_connection is None:
+        _ensure_db_dir()
+        _current_connection = sqlite3.connect(DB_PATH, timeout=30)
+        _current_connection.row_factory = sqlite3.Row
+        _current_connection.execute("PRAGMA journal_mode=WAL")
+        _current_connection.execute("PRAGMA foreign_keys=ON")
+        _current_connection.execute("PRAGMA busy_timeout=5000")
+    
+    return _current_connection
+
+
+def close_connection():
+    """Close the shared database connection. Used for cleanup on exit."""
+    global _current_connection
+    if _current_connection is not None:
+        try:
+            _current_connection.close()
+        except Exception:
+            pass
+        _current_connection = None
 
 
 def init_db():
@@ -29,6 +47,11 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS facilities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
@@ -106,6 +129,12 @@ def init_db():
         );
     """)
 
+    # Track initial schema version
+    cursor.execute(
+        "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)",
+        ("initial_schema",)
+    )
+
     default_tasks = [
         "IV Insertion",
         "Midline Insertion",
@@ -113,6 +142,7 @@ def init_db():
         "Dressing Change",
         "Blood Draw",
         "Troubleshoot",
+        "Port Insertion",
         "Port Access",
         "Supplies: IV",
         "Supplies: Midline",
@@ -140,14 +170,33 @@ def init_db():
     )
 
     conn.commit()
-    conn.close()
     _migrate_add_clinician_columns()
     _migrate_add_facility_details()
     _migrate_add_attempts()
-    _migrate_add_company_info()
+    _migrate_add_company_info_and_pricing()
+
+
+def _migration_applied(name):
+    """Check if a migration has already been applied."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = ?", (name,)
+    ).fetchone()
+    return row is not None
+
+
+def _mark_migration_applied(name):
+    """Mark a migration as applied."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)", (name,)
+    )
+    conn.commit()
 
 
 def _migrate_add_clinician_columns():
+    if _migration_applied("add_clinician_columns"):
+        return
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -159,10 +208,12 @@ def _migrate_add_clinician_columns():
     except sqlite3.OperationalError:
         pass
     conn.commit()
-    conn.close()
+    _mark_migration_applied("add_clinician_columns")
 
 
 def _migrate_add_facility_details():
+    if _migration_applied("add_facility_details"):
+        return
     conn = get_connection()
     cursor = conn.cursor()
     for col in ("address", "phone", "contact_name", "contact_email",
@@ -172,10 +223,12 @@ def _migrate_add_facility_details():
         except sqlite3.OperationalError:
             pass
     conn.commit()
-    conn.close()
+    _mark_migration_applied("add_facility_details")
 
 
 def _migrate_add_attempts():
+    if _migration_applied("add_attempts"):
+        return
     conn = get_connection()
     try:
         conn.execute("ALTER TABLE records ADD COLUMN attempts INTEGER")
@@ -186,10 +239,12 @@ def _migrate_add_attempts():
     except sqlite3.OperationalError:
         pass
     conn.commit()
-    conn.close()
+    _mark_migration_applied("add_attempts")
 
 
-def _migrate_add_company_info():
+def _migrate_add_company_info_and_pricing():
+    if _migration_applied("add_company_info_and_pricing"):
+        return
     conn = get_connection()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS company_info (
@@ -214,10 +269,9 @@ def _migrate_add_company_info():
         )
     """)
     conn.commit()
-    conn.close()
+    _mark_migration_applied("add_company_info_and_pricing")
 
 
 if __name__ == "__main__":
     init_db()
-    _migrate_add_clinician_columns()
     print(f"Database initialized at {DB_PATH}")

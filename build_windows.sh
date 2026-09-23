@@ -4,7 +4,7 @@
 set -e
 
 APP_NAME="IVLeague"
-VERSION="1.01"
+VERSION="1.02"
 
 echo "Building IV League Desktop v${VERSION} Windows installer..."
 echo ""

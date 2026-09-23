@@ -1,8 +1,8 @@
 import os
 import json
-from .db import _get_db_dir
+from .db import DB_DIR
 
-_SETTINGS_PATH = os.path.join(_get_db_dir(), "settings.json")
+_SETTINGS_PATH = os.path.join(DB_DIR, "settings.json")
 
 def _load():
     if os.path.exists(_SETTINGS_PATH):
