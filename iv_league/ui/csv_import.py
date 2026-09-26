@@ -65,7 +65,10 @@ class CsvImportDialog(QDialog):
 
         for i, row in enumerate(self.rows):
             for j, key in enumerate(headers):
-                self.table.setItem(i, j, QTableWidgetItem(str(row.get(key, ""))))
+                value = row.get(key, "")
+                if isinstance(value, float):
+                    value = f"{value:g}"
+                self.table.setItem(i, j, QTableWidgetItem(str(value)))
 
         self.info_label.setText(f"Preview: {len(self.rows)} row(s) found.")
         self.import_btn.setEnabled(True)
@@ -77,7 +80,15 @@ class CsvImportDialog(QDialog):
         count = 0
         skipped = 0
         errors = 0
-        
+
+        supply_name_to_col = {
+            s["task_name"].lower(): s["column_name"]
+            for s in models.get_supply_columns()
+        }
+        table_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(records)").fetchall()
+        }
+
         try:
             conn.execute("BEGIN")
             
@@ -112,6 +123,23 @@ class CsvImportDialog(QDialog):
                     if c_name and c_name.strip() and c_name.strip() != "Select Clinician":
                         models.add_clinician(c_name.strip(), (c_cred or "").strip())
 
+                    supply_values = {}
+                    for key, value in row.items():
+                        if not key.lower().startswith("supplies"):
+                            continue
+                        col = supply_name_to_col.get(key.lower())
+                        if not col:
+                            continue
+                        if col not in table_cols:
+                            try:
+                                conn.execute(
+                                    f"ALTER TABLE records ADD COLUMN {col} REAL DEFAULT 0"
+                                )
+                                table_cols.add(col)
+                            except Exception:
+                                continue
+                        supply_values[col] = float(value)
+
                     models.add_record(
                         client_id, facility_id, task_id,
                         date_str, time_str,
@@ -122,6 +150,7 @@ class CsvImportDialog(QDialog):
                         c_name or None,
                         c_cred or None,
                         row.get("cap_change", 0),
+                        supply_values,
                     )
                     count += 1
                 except Exception:
