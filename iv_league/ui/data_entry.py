@@ -86,6 +86,9 @@ class DataEntryWidget(QWidget):
         dt_group.setLayout(dt_layout)
         root.addWidget(dt_group)
 
+        # -- Task and Supplies Row --
+        task_supplies_row = QHBoxLayout()
+        
         # -- Task --
         task_group = QGroupBox("Task")
         task_form = QFormLayout()
@@ -111,25 +114,34 @@ class DataEntryWidget(QWidget):
         self.loc_combo.setMinimumWidth(300)
         task_form.addRow(self.loc_label, self.loc_combo)
 
-        self.attempts_label = QLabel("Attempts:")
-        self.attempts_edit = QLineEdit()
-        self.attempts_edit.setPlaceholderText("Number of attempts")
-        self.attempts_edit.setMinimumWidth(300)
-        task_form.addRow(self.attempts_label, self.attempts_edit)
-
-        self.cap_label = QLabel("Cap Change:")
-        self.cap_combo = QComboBox()
-        self.cap_combo.addItems(["No", "Yes"])
-        self.cap_combo.setMinimumWidth(300)
-        task_form.addRow(self.cap_label, self.cap_combo)
-
         self.notes_label = QLabel("Notes:")
         self.notes_edit = QLineEdit()
         self.notes_edit.setMinimumWidth(300)
         task_form.addRow(self.notes_label, self.notes_edit)
 
         task_group.setLayout(task_form)
-        root.addWidget(task_group)
+        task_supplies_row.addWidget(task_group)
+
+        # -- Supplies --
+        supplies_group = QGroupBox("Supplies")
+        supplies_form = QFormLayout()
+        supplies_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        supplies_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        
+        self.supply_fields = {}
+        supply_cols = models.get_supply_columns()
+        for supply_col in supply_cols:
+            label = QLabel(f"{supply_col['task_name']}:")
+            field = QLineEdit()
+            field.setPlaceholderText("0")
+            field.setMinimumWidth(300)
+            supplies_form.addRow(label, field)
+            self.supply_fields[supply_col['column_name']] = field
+        
+        supplies_group.setLayout(supplies_form)
+        task_supplies_row.addWidget(supplies_group)
+        
+        root.addLayout(task_supplies_row)
 
         # -- Save --
         btn_row = QHBoxLayout()
@@ -158,14 +170,28 @@ class DataEntryWidget(QWidget):
         self.clinician_combo.setCurrentIndex(default_index)
 
     def _refresh_tasks(self):
-        names = [t["name"] for t in models.get_all_tasks()]
+        current_task = self.task_combo.currentText()
+        tasks_by_category = models.get_tasks_by_category()
+        procedures_tasks = tasks_by_category.get("Procedures", [])
+        
         self.task_combo.clear()
-        self.task_combo.addItems(names)
+        
+        for task in procedures_tasks:
+            self.task_combo.addItem(task["name"], task["id"])
+        
+        if current_task:
+            for i in range(self.task_combo.count()):
+                if current_task == self.task_combo.itemText(i):
+                    self.task_combo.setCurrentIndex(i)
+                    break
+        elif self.task_combo.count() > 0:
+            self.task_combo.setCurrentIndex(0)
 
     def _on_task_changed(self, task_name):
-        gauges = TASK_OPTIONS.get(task_name, [])
+        task_name_only = task_name.split(" - $")[0] if " - $" in task_name else task_name
+        gauges = TASK_OPTIONS.get(task_name_only, [])
         sides = SIDE_OPTIONS
-        locations = LOCATION_OPTIONS.get(task_name, [])
+        locations = LOCATION_OPTIONS.get(task_name_only, [])
 
         self.gauge_combo.clear()
         self.gauge_combo.addItems(gauges)
@@ -182,9 +208,8 @@ class DataEntryWidget(QWidget):
         self.loc_combo.setVisible(bool(locations))
         self.loc_label.setVisible(bool(locations))
 
-        is_troubleshoot = task_name == "Troubleshoot"
-        self.notes_edit.setVisible(is_troubleshoot)
-        self.notes_label.setVisible(is_troubleshoot)
+        self.notes_edit.setVisible(True)
+        self.notes_label.setVisible(True)
 
     def _save(self):
         try:
@@ -192,7 +217,8 @@ class DataEntryWidget(QWidget):
             client_name = self.name_edit.text().strip()
             date_str = self.date_edit.date().toString("yyyy-MM-dd")
             time_str = self.time_edit.text().strip()
-            task_name = self.task_combo.currentText()
+            task_display = self.task_combo.currentText()
+            task_id = self.task_combo.currentData()
 
             if not facility_name:
                 QMessageBox.warning(self, "Error", "Facility is required.")
@@ -207,12 +233,11 @@ class DataEntryWidget(QWidget):
             models.add_facility(facility_name)
             facility_id = models.get_facility_id(facility_name)
             client_id = models.get_or_create_client(client_name, facility_id)
-            task_id = models.get_task_id(task_name)
 
             if task_id is None:
                 QMessageBox.warning(
                     self, "Error",
-                    f"Task '{task_name}' not found in database."
+                    f"Task not found in database."
                 )
                 return
 
@@ -220,11 +245,6 @@ class DataEntryWidget(QWidget):
             side = self.side_combo.currentText() or None
             location = self.loc_combo.currentText() or None
             notes = self.notes_edit.text().strip() or None
-
-            attempts_text = self.attempts_edit.text().strip()
-            attempts = int(attempts_text) if attempts_text.isdigit() else None
-
-            cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
 
             clinician_id = self.clinician_combo.currentData()
             clinician_name = None
@@ -237,19 +257,30 @@ class DataEntryWidget(QWidget):
                         clinician_credentials = c["credentials"]
                         break
 
+            supply_values = {}
+            for col_name, field in self.supply_fields.items():
+                value_text = field.text().strip()
+                try:
+                    value = float(value_text) if value_text else 0.0
+                except ValueError:
+                    value = 0.0
+                supply_values[col_name] = value
+
             models.add_record(
                 client_id, facility_id, task_id,
                 date_str, time_str,
                 gauge, side, location, notes,
                 clinician_name, clinician_credentials,
-                attempts, cap_change,
+                None,
+                supply_values
             )
 
             self.refresh_facilities()
             QMessageBox.information(self, "Saved", "Record saved successfully.")
             self.name_edit.clear()
             self.notes_edit.clear()
-            self.attempts_edit.clear()
+            for field in self.supply_fields.values():
+                field.clear()
         except Exception as e:
             QMessageBox.critical(
                 self, "Error",

@@ -107,6 +107,11 @@ class CsvImportDialog(QDialog):
                         skipped += 1
                         continue
 
+                    c_name = row.get("clinician_name")
+                    c_cred = row.get("clinician_credentials")
+                    if c_name and c_name.strip() and c_name.strip() != "Select Clinician":
+                        models.add_clinician(c_name.strip(), (c_cred or "").strip())
+
                     models.add_record(
                         client_id, facility_id, task_id,
                         date_str, time_str,
@@ -114,9 +119,8 @@ class CsvImportDialog(QDialog):
                         row.get("side") or None,
                         row.get("location") or None,
                         row.get("notes") or None,
-                        row.get("clinician_name") or None,
-                        row.get("clinician_credentials") or None,
-                        row.get("attempts"),
+                        c_name or None,
+                        c_cred or None,
                         row.get("cap_change", 0),
                     )
                     count += 1

@@ -56,11 +56,7 @@ class SearchViewWidget(QWidget):
 
 # -- Table --
         self.table = QTableWidget()
-        self.table.setColumnCount(11)
-        self.table.setHorizontalHeaderLabels([
-            "Date", "Time", "Client", "Facility", "Task",
-            "Details", "Notes", "Attempts", "Cap Change", "Clinician", "Credentials"
-        ])
+        self._setup_table_columns()
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -71,14 +67,44 @@ class SearchViewWidget(QWidget):
         self._load_column_widths()
         header.sectionResized.connect(self._save_column_widths)
         root.addWidget(self.table)
+    
+    def _setup_table_columns(self):
+        base_headers = [
+            "Date", "Time", "Client", "Facility", "Task",
+            "Details", "Notes", "Cap Change", "Clinician", "Credentials"
+        ]
+        
+        supply_cols = models.get_supply_columns()
+        supply_headers = [s["task_name"] for s in supply_cols]
+        
+        all_headers = base_headers + supply_headers
+        self.table.setColumnCount(len(all_headers))
+        self.table.setHorizontalHeaderLabels(all_headers)
+        
+        self._base_column_count = len(base_headers)
+        self._supply_columns = supply_cols
 
     def _load_facilities(self):
+        current = self.facility_combo.currentData()
+        self.facility_combo.clear()
+        self.facility_combo.addItem("All", None)
         for f in models.get_all_facilities():
             self.facility_combo.addItem(f["name"], f["id"])
+        if current is not None:
+            idx = self.facility_combo.findData(current)
+            if idx >= 0:
+                self.facility_combo.setCurrentIndex(idx)
 
     def _load_tasks(self):
+        current = self.task_combo.currentData()
+        self.task_combo.clear()
+        self.task_combo.addItem("All", None)
         for t in models.get_all_tasks():
             self.task_combo.addItem(t["name"], t["id"])
+        if current is not None:
+            idx = self.task_combo.findData(current)
+            if idx >= 0:
+                self.task_combo.setCurrentIndex(idx)
 
     def _load_column_widths(self):
         widths = self._settings.value("searchColumnWidths")
@@ -115,14 +141,23 @@ class SearchViewWidget(QWidget):
                 r["date"], r["time"], r["client_name"],
                 r["facility_name"], r["task_name"],
                 details, r.get("notes", ""),
-                str(r["attempts"]) if r.get("attempts") is not None else "",
                 "Yes" if r.get("cap_change") else "No",
                 r.get("clinician_name", ""), r.get("clinician_credentials", ""),
             ]
+            
+            for supply_col in self._supply_columns:
+                col_name = supply_col["column_name"]
+                supply_value = r.get(col_name, 0.0)
+                values.append(str(supply_value) if supply_value else "")
+            
             for j, val in enumerate(values):
                 item = QTableWidgetItem(str(val or ""))
                 item.setData(Qt.ItemDataRole.UserRole, r["id"])
                 self.table.setItem(i, j, item)
+    
+    def refresh_supply_columns(self):
+        self._setup_table_columns()
+        self._refresh()
 
     def _delete_selected(self):
         rows = self.table.selectionModel().selectedRows()

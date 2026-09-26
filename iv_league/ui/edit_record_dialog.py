@@ -16,6 +16,7 @@ class EditRecordDialog(QDialog):
         self.setMinimumWidth(500)
         self._build_ui()
         self._populate_data()
+        self._populate_supplies()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -81,6 +82,9 @@ class EditRecordDialog(QDialog):
         dt_group.setLayout(dt_layout)
         layout.addWidget(dt_group)
 
+        # -- Task and Supplies Row --
+        task_supplies_row = QHBoxLayout()
+        
         # -- Task --
         task_group = QGroupBox("Task")
         task_form = QFormLayout()
@@ -106,25 +110,34 @@ class EditRecordDialog(QDialog):
         self.loc_combo.setMinimumWidth(300)
         task_form.addRow(self.loc_label, self.loc_combo)
 
-        self.attempts_label = QLabel("Attempts:")
-        self.attempts_edit = QLineEdit()
-        self.attempts_edit.setPlaceholderText("Number of attempts")
-        self.attempts_edit.setMinimumWidth(300)
-        task_form.addRow(self.attempts_label, self.attempts_edit)
-
-        self.cap_label = QLabel("Cap Change:")
-        self.cap_combo = QComboBox()
-        self.cap_combo.addItems(["No", "Yes"])
-        self.cap_combo.setMinimumWidth(300)
-        task_form.addRow(self.cap_label, self.cap_combo)
-
         self.notes_label = QLabel("Notes:")
         self.notes_edit = QLineEdit()
         self.notes_edit.setMinimumWidth(300)
         task_form.addRow(self.notes_label, self.notes_edit)
 
         task_group.setLayout(task_form)
-        layout.addWidget(task_group)
+        task_supplies_row.addWidget(task_group)
+
+        # -- Supplies --
+        supplies_group = QGroupBox("Supplies")
+        supplies_form = QFormLayout()
+        supplies_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        supplies_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        
+        self.supply_fields = {}
+        supply_cols = models.get_supply_columns()
+        for supply_col in supply_cols:
+            label = QLabel(f"{supply_col['task_name']}:")
+            field = QLineEdit()
+            field.setPlaceholderText("0")
+            field.setMinimumWidth(300)
+            supplies_form.addRow(label, field)
+            self.supply_fields[supply_col['column_name']] = field
+        
+        supplies_group.setLayout(supplies_form)
+        task_supplies_row.addWidget(supplies_group)
+        
+        layout.addLayout(task_supplies_row)
 
         # -- Buttons --
         btn_layout = QHBoxLayout()
@@ -205,9 +218,8 @@ class EditRecordDialog(QDialog):
         self.loc_combo.setVisible(bool(locations))
         self.loc_label.setVisible(bool(locations))
 
-        is_troubleshoot = task_name == "Troubleshoot"
-        self.notes_edit.setVisible(is_troubleshoot)
-        self.notes_label.setVisible(is_troubleshoot)
+        self.notes_edit.setVisible(True)
+        self.notes_label.setVisible(True)
 
         # Populate task-specific fields
         if self.record_data.get("gauge"):
@@ -224,20 +236,16 @@ class EditRecordDialog(QDialog):
             index = self.loc_combo.findText(self.record_data["location"])
             if index >= 0:
                 self.loc_combo.setCurrentIndex(index)
-                
-        attempts = self.record_data.get("attempts")
-        if attempts is not None:
-            self.attempts_edit.setText(str(attempts))
-        else:
-            self.attempts_edit.clear()
-            
-        cap_change = self.record_data.get("cap_change")
-        if cap_change is not None:
-            self.cap_combo.setCurrentIndex(1 if cap_change == 1 else 0)
-        else:
-            self.cap_combo.setCurrentIndex(0)  # Default to "No"
-            
+
         self.notes_edit.setText(self.record_data.get("notes", ""))
+    
+    def _populate_supplies(self):
+        for col_name, field in self.supply_fields.items():
+            value = self.record_data.get(col_name, 0.0)
+            if value and value > 0:
+                field.setText(str(value))
+            else:
+                field.clear()
 
     def _update_record(self):
         try:
@@ -272,12 +280,7 @@ class EditRecordDialog(QDialog):
             side = self.side_combo.currentText() or None
             location = self.loc_combo.currentText() or None
             notes = self.notes_edit.text().strip() or None
-             
-            attempts_text = self.attempts_edit.text().strip()
-            attempts = int(attempts_text) if attempts_text.isdigit() else None
-             
-            cap_change = 1 if self.cap_combo.currentText() == "Yes" else 0
-             
+
             # Get clinician info
             clinician_id = self.clinician_combo.currentData()
             clinician_name = None
@@ -289,6 +292,16 @@ class EditRecordDialog(QDialog):
                 if clinician:
                     clinician_name = clinician["name"]
                     clinician_credentials = clinician["credentials"]
+            
+            # Get supply values
+            supply_values = {}
+            for col_name, field in self.supply_fields.items():
+                value_text = field.text().strip().replace("$", "").replace(",", "")
+                try:
+                    value = float(value_text) if value_text else 0.0
+                except ValueError:
+                    value = 0.0
+                supply_values[col_name] = value
 
             # Update the record
             models.update_record(
@@ -296,7 +309,8 @@ class EditRecordDialog(QDialog):
                 client_id, facility_id, task_id,
                 date_str, time_str, gauge, side, location, notes,
                 clinician_name, clinician_credentials,
-                attempts, cap_change
+                None,
+                supply_values
             )
             
             QMessageBox.information(self, "Success", "Record updated successfully.")

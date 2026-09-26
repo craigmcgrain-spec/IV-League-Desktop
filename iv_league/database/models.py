@@ -43,11 +43,18 @@ def facility_has_records(facility_id):
 
 
 def delete_facility(facility_id):
-    """Delete a facility only if it has no linked records."""
+    """Delete a facility only if it has no linked records and invoices."""
     if facility_has_records(facility_id):
         return False, "Cannot delete facility with existing records."
     
     conn = get_connection()
+    inv = conn.execute(
+        "SELECT COUNT(*) as count FROM invoices WHERE facility_id = ?", (facility_id,)
+    ).fetchone()
+    if inv["count"] > 0:
+        return False, "Cannot delete facility with existing invoices."
+
+    conn.execute("DELETE FROM clients WHERE facility_id = ?", (facility_id,))
     conn.execute("DELETE FROM facilities WHERE id = ?", (facility_id,))
     conn.commit()
     return True, "Facility deleted successfully."
@@ -140,6 +147,47 @@ def set_default_clinician(clinician_id):
     conn.commit()
 
 
+def get_clinician(clinician_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM clinicians WHERE id = ?", (clinician_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_clinician(clinician_id, name, credentials):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE clinicians SET name = ?, credentials = ? WHERE id = ?",
+        (name, credentials, clinician_id),
+    )
+    conn.commit()
+
+
+def delete_clinician(clinician_id):
+    conn = get_connection()
+    clinician = get_clinician(clinician_id)
+    if not clinician:
+        return False, "Clinician not found."
+    if clinician["name"] == "Select Clinician":
+        return False, "Cannot delete placeholder clinician."
+
+    was_default = clinician.get("is_default", 0)
+    conn.execute("DELETE FROM clinicians WHERE id = ?", (clinician_id,))
+
+    if was_default:
+        fallback = conn.execute(
+            "SELECT id FROM clinicians WHERE name != 'Select Clinician' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if fallback:
+            conn.execute("UPDATE clinicians SET is_default = 1 WHERE id = ?", (fallback["id"],))
+        else:
+            conn.execute("UPDATE clinicians SET is_default = 1 WHERE name = 'Select Clinician'")
+
+    conn.commit()
+    return True, "Clinician deleted successfully."
+
+
 # ---------------------------------------------------------------------------
 # Clients
 # ---------------------------------------------------------------------------
@@ -198,15 +246,24 @@ def record_exists(client_id, facility_id, task_id, date, time):
 def add_record(client_id, facility_id, task_id, date, time,
                gauge=None, side=None, location=None, notes=None,
                clinician_name=None, clinician_credentials=None,
-               attempts=None, cap_change=None):
+               cap_change=None, supply_values=None):
     conn = get_connection()
+    
+    base_cols = "client_id, facility_id, task_id, date, time, gauge, side, location, notes, clinician_name, clinician_credentials, cap_change"
+    base_vals = [client_id, facility_id, task_id, date, time, gauge, side, location, notes, clinician_name, clinician_credentials, cap_change]
+    
+    if supply_values:
+        supply_cols = ", ".join(supply_values.keys())
+        supply_placeholders = ", ".join("?" * len(supply_values))
+        base_cols += f", {supply_cols}"
+        placeholders = ", ".join("?" * len(base_vals)) + f", {supply_placeholders}"
+        base_vals.extend(supply_values.values())
+    else:
+        placeholders = ", ".join("?" * len(base_vals))
+    
     conn.execute(
-        """INSERT INTO records
-           (client_id, facility_id, task_id, date, time, gauge, side, location,
-            notes, clinician_name, clinician_credentials, attempts, cap_change)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (client_id, facility_id, task_id, date, time, gauge, side, location,
-         notes, clinician_name, clinician_credentials, attempts, cap_change),
+        f"INSERT INTO records ({base_cols}) VALUES ({placeholders})",
+        base_vals
     )
     conn.commit()
 
@@ -267,23 +324,35 @@ def get_record_by_id(record_id):
 
 
 def update_record(record_id, client_id, facility_id, task_id, date, time,
-                   gauge=None, side=None, location=None, notes=None,
-                   clinician_name=None, clinician_credentials=None,
-                   attempts=None, cap_change=None):
+                  gauge=None, side=None, location=None, notes=None,
+                  clinician_name=None, clinician_credentials=None,
+                  cap_change=None, supply_values=None):
     conn = get_connection()
-    conn.execute(
-        """UPDATE records SET
-            client_id = ?, facility_id = ?, task_id = ?,
-            date = ?, time = ?, gauge = ?, side = ?, location = ?,
-            notes = ?, clinician_name = ?, clinician_credentials = ?,
-            attempts = ?, cap_change = ?
-            WHERE id = ?""",
-        (client_id, facility_id, task_id,
-         date, time, gauge, side, location, notes,
-         clinician_name, clinician_credentials,
-         attempts, cap_change,
-         record_id)
-    )
+    
+    base_update = """UPDATE records SET
+        client_id = ?, facility_id = ?, task_id = ?,
+        date = ?, time = ?, gauge = ?, side = ?, location = ?,
+        notes = ?, clinician_name = ?, clinician_credentials = ?,
+        cap_change = ?"""
+    
+    params = [client_id, facility_id, task_id,
+              date, time, gauge, side, location, notes,
+              clinician_name, clinician_credentials,
+              cap_change]
+    
+    if supply_values:
+        supply_sets = []
+        for col_name, value in supply_values.items():
+            supply_sets.append(f"{col_name} = ?")
+            params.append(value)
+        
+        if supply_sets:
+            base_update += ", " + ", ".join(supply_sets)
+    
+    base_update += " WHERE id = ?"
+    params.append(record_id)
+    
+    conn.execute(base_update, params)
     conn.commit()
 
 
@@ -304,13 +373,64 @@ def get_invoice_records(facility_id, start_date, end_date):
     return [dict(r) for r in rows]
 
 
-def save_invoice(facility_id, start_date, end_date, total):
+def get_next_invoice_number():
+    """Generate a sequential invoice number: INV-YYYY-XXXX."""
+    import datetime
+    conn = get_connection()
+    year = datetime.datetime.now().year
+    row = conn.execute("SELECT COUNT(*) as count FROM invoices").fetchone()
+    count = (row["count"] or 0) + 1
+    return f"INV-{year}-{count:04d}"
+
+
+def save_invoice(facility_id, start_date, end_date, total, invoice_number=None):
+    if not invoice_number:
+        invoice_number = get_next_invoice_number()
     conn = get_connection()
     conn.execute(
-        "INSERT INTO invoices (facility_id, start_date, end_date, total) VALUES (?, ?, ?, ?)",
-        (facility_id, start_date, end_date, total),
+        """INSERT INTO invoices (facility_id, start_date, end_date, total, invoice_number)
+           VALUES (?, ?, ?, ?, ?)""",
+        (facility_id, start_date, end_date, total, invoice_number),
     )
     conn.commit()
+    return invoice_number
+
+
+def get_all_invoices():
+    """Retrieve invoice history ordered by most recent."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT i.*, f.name AS facility_name
+           FROM invoices i
+           JOIN facilities f ON i.facility_id = f.id
+           ORDER BY i.id DESC"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_cap_change_items(facility_id, start_date, end_date):
+    """Calculate billed cap changes from records where cap_change = 1."""
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT COUNT(*) AS qty
+           FROM records r
+           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
+             AND r.cap_change = 1""",
+        (facility_id, start_date, end_date),
+    ).fetchone()
+    
+    qty = row["qty"] if row else 0
+    if qty == 0:
+        return []
+
+    task_id = get_task_id("Cap Change")
+    price = get_price(task_id) if task_id else 0.0
+    return [{
+        "task_name": "Cap Change",
+        "qty": qty,
+        "price": price,
+        "subtotal": qty * price,
+    }]
 
 
 # ---------------------------------------------------------------------------
@@ -366,20 +486,241 @@ def get_all_pricing():
     return [dict(r) for r in rows]
 
 
-def get_price(task_id):
+def get_price(task_id, category_id=None):
     conn = get_connection()
+    if category_id is None:
+        categories = get_pricing_categories()
+        if not categories:
+            row = conn.execute(
+                "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            return row["price"] if row else 0
+        category_id = categories[0]["id"]
+    
+    row = conn.execute(
+        "SELECT price FROM pricing_values WHERE task_id = ? AND category_id = ?",
+        (task_id, category_id)
+    ).fetchone()
+    if row:
+        return row["price"]
+    
     row = conn.execute(
         "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
     ).fetchone()
     return row["price"] if row else 0
 
 
-def set_price(task_id, price):
+def set_price(task_id, price, category_id=None):
+    conn = get_connection()
+    if category_id is None:
+        conn.execute(
+            "INSERT OR REPLACE INTO pricing (task_id, price) VALUES (?, ?)",
+            (task_id, price),
+        )
+    else:
+        conn.execute(
+            "INSERT OR REPLACE INTO pricing_values (task_id, category_id, price) VALUES (?, ?, ?)",
+            (task_id, category_id, price),
+        )
+    conn.commit()
+
+
+def get_pricing_categories():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, name, display_order FROM pricing_categories ORDER BY display_order, name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_pricing_category(name, display_order=None):
+    conn = get_connection()
+    if display_order is None:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM pricing_categories"
+        ).fetchone()
+        display_order = row["next_order"]
+    
+    cursor = conn.execute(
+        "INSERT INTO pricing_categories (name, display_order) VALUES (?, ?)",
+        (name, display_order)
+    )
+    category_id = cursor.lastrowid
+    
+    tasks = get_all_tasks()
+    for task in tasks:
+        conn.execute(
+            "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, 0)",
+            (task["id"], category_id)
+        )
+    
+    conn.commit()
+    return category_id
+
+
+def update_pricing_category(category_id, name):
     conn = get_connection()
     conn.execute(
-        "INSERT OR REPLACE INTO pricing (task_id, price) VALUES (?, ?)",
-        (task_id, price),
+        "UPDATE pricing_categories SET name = ? WHERE id = ?",
+        (name, category_id)
     )
+    conn.commit()
+
+
+def delete_pricing_category(category_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM pricing_categories WHERE id = ?", (category_id,))
+    conn.commit()
+
+
+def get_pricing_matrix():
+    conn = get_connection()
+    tasks = get_all_tasks()
+    categories = get_pricing_categories()
+    
+    if not categories:
+        old_pricing = get_all_pricing()
+        return {
+            "tasks": tasks,
+            "categories": [{"id": None, "name": "Price ($)", "display_order": 0}],
+            "values": {(p["task_id"], None): p["price"] for p in old_pricing}
+        }
+    
+    rows = conn.execute(
+        """SELECT task_id, category_id, price 
+           FROM pricing_values 
+           ORDER BY task_id, category_id"""
+    ).fetchall()
+    
+    values = {(r["task_id"], r["category_id"]): r["price"] for r in rows}
+    
+    return {
+        "tasks": tasks,
+        "categories": categories,
+        "values": values
+    }
+
+
+def get_task_categories():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, name, display_order FROM task_categories ORDER BY display_order, name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_tasks_by_category():
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT t.id, t.name, t.category_id, 
+                  COALESCE(tc.name, 'Uncategorized') AS category_name,
+                  COALESCE(tc.display_order, 999) AS category_order
+           FROM tasks t
+           LEFT JOIN task_categories tc ON t.category_id = tc.id
+           ORDER BY category_order, tc.name, t.name"""
+    ).fetchall()
+    
+    result = {}
+    for row in rows:
+        category_name = row["category_name"]
+        if category_name not in result:
+            result[category_name] = []
+        result[category_name].append({
+            "id": row["id"],
+            "name": row["name"],
+            "category_id": row["category_id"]
+        })
+    
+    return result
+
+
+def get_task_category_name(task_id):
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT tc.name
+           FROM tasks t
+           LEFT JOIN task_categories tc ON t.category_id = tc.id
+           WHERE t.id = ?""",
+        (task_id,)
+    ).fetchone()
+    return row["name"] if row and row["name"] else None
+
+
+def get_supply_columns():
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT t.id, t.name
+           FROM tasks t
+           JOIN task_categories tc ON t.category_id = tc.id
+           WHERE tc.name = 'Supplies'
+           ORDER BY t.name"""
+    ).fetchall()
+    
+    supply_columns = []
+    for row in rows:
+        col_name = row["name"].lower().replace(" ", "_").replace(":", "")
+        supply_columns.append({
+            "task_id": row["id"],
+            "task_name": row["name"],
+            "column_name": col_name
+        })
+    
+    return supply_columns
+
+
+def add_task(name, category_name=None):
+    conn = get_connection()
+    
+    category_id = None
+    if category_name:
+        row = conn.execute(
+            "SELECT id FROM task_categories WHERE name = ?", (category_name,)
+        ).fetchone()
+        if row:
+            category_id = row["id"]
+    
+    cursor = conn.execute(
+        "INSERT INTO tasks (name, category_id) VALUES (?, ?)",
+        (name, category_id)
+    )
+    task_id = cursor.lastrowid
+    
+    categories = get_pricing_categories()
+    if categories:
+        for category in categories:
+            conn.execute(
+                "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, 0)",
+                (task_id, category["id"])
+            )
+    else:
+        conn.execute(
+            "INSERT INTO pricing (task_id, price) VALUES (?, 0)",
+            (task_id,)
+        )
+    
+    if category_name == "Supplies":
+        col_name = name.lower().replace(" ", "_").replace(":", "")
+        try:
+            conn.execute(f"ALTER TABLE records ADD COLUMN {col_name} REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+    
+    conn.commit()
+    return task_id
+
+
+def update_task(task_id, name):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE tasks SET name = ? WHERE id = ?",
+        (name, task_id)
+    )
+    conn.commit()
+
+
+def delete_task(task_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
 
 
@@ -415,40 +756,32 @@ def get_invoice_items_dated(facility_id, start_date, end_date):
     return [dict(r) for r in rows]
 
 
-SUPPLIES_MAP = {
-    "IV Insertion": "Supplies: IV",
-    "Midline Insertion": "Supplies: Midline",
-    "PICC Insertion": "Supplies: PICC",
-    "Port Access": "Supplies: Port Access",
-}
-
-
 def get_supplies_items(facility_id, start_date, end_date):
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT t.name AS task_name,
-                  SUM(r.attempts - 1) AS extra_attempts
-           FROM records r
-           JOIN tasks t ON r.task_id = t.id
-           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
-             AND r.attempts > 1
-             AND t.name IN (?, ?, ?, ?)
-           GROUP BY t.name""",
-        (facility_id, start_date, end_date,
-         "IV Insertion", "Midline Insertion", "PICC Insertion", "Port Access"),
-    ).fetchall()
-
+    supply_cols = get_supply_columns()
+    
     result = []
-    for row in rows:
-        parent_task = row["task_name"]
-        supplies_name = SUPPLIES_MAP.get(parent_task)
-        if supplies_name:
-            supplies_task_id = get_task_id(supplies_name)
-            price = get_price(supplies_task_id) if supplies_task_id else 0
+    for supply_col in supply_cols:
+        col_name = supply_col['column_name']
+        task_name = supply_col['task_name']
+        task_id = supply_col['task_id']
+        
+        row = conn.execute(
+            f"""SELECT SUM({col_name}) AS total_qty
+               FROM records
+               WHERE facility_id = ? AND date >= ? AND date <= ?
+                 AND {col_name} IS NOT NULL AND {col_name} > 0""",
+            (facility_id, start_date, end_date)
+        ).fetchone()
+        
+        total_qty = row["total_qty"] if row and row["total_qty"] else 0
+        if total_qty > 0:
+            price = get_price(task_id) if task_id else 0
             result.append({
-                "task_name": supplies_name,
-                "qty": row["extra_attempts"],
+                "task_name": task_name,
+                "qty": total_qty,
                 "price": price,
-                "subtotal": row["extra_attempts"] * price,
+                "subtotal": total_qty * price,
             })
+    
     return result

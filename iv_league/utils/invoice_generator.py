@@ -57,7 +57,7 @@ def _draw_right_text(c, x, y, text, font="Helvetica", size=11, color=TEXT):
 
 def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
                           facility_details=None, company_info=None, items_dated=None,
-                          supplies=None):
+                          supplies=None, invoice_number="0001", cap_changes=None):
     c = canvas.Canvas(filepath, pagesize=letter)
 
     margin = 50
@@ -141,13 +141,12 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
     info_val_y = info_y - 38
 
     _draw_text(c, col1, info_text_y, "INVOICE NO #", "Helvetica-Bold", 8, MUTED)
-    _draw_text(c, col1, info_val_y, "0001", "Helvetica-Bold", 14, NAVY)
+    _draw_text(c, col1, info_val_y, str(invoice_number), "Helvetica-Bold", 13, NAVY)
 
     _draw_text(c, col2, info_text_y, "DATE", "Helvetica-Bold", 8, MUTED)
     _draw_text(c, col2, info_val_y, start_date, "Helvetica-Bold", 12, NAVY)
 
     grand_total = sum(item["qty"] * item["price"] for item in items)
-    total_qty = sum(item["qty"] for item in items)
     _draw_right_text(c, col3, info_text_y, "AMOUNT DUE", "Helvetica-Bold", 8, MUTED)
     _draw_right_text(c, col3, info_val_y, f"${grand_total:.2f}", "Helvetica-Bold", 14, NAVY)
 
@@ -202,15 +201,15 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
 
     c.showPage()
 
-    if items_dated or supplies:
+    if items_dated or supplies or cap_changes:
         _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
-                            company_info, facility_details, supplies)
+                            company_info, facility_details, supplies, cap_changes)
 
     c.save()
 
 
 def _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
-                        company_info, facility_details, supplies=None):
+                        company_info, facility_details, supplies=None, cap_changes=None):
     margin = 50
     top = HEIGHT - 50
 
@@ -239,10 +238,17 @@ def _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
             top = HEIGHT - 50
             row_y = top - 30
 
+        client_name = item.get("client_name") or ""
+        if len(client_name) > 28:
+            client_name = client_name[:25] + "..."
+        task_name = item.get("task_name") or ""
+        if len(task_name) > 30:
+            task_name = task_name[:27] + "..."
+
         _draw_text(c, margin, row_y, item["date"], "Helvetica", 9, TEXT)
         _draw_text(c, margin + 80, row_y, item["time"], "Helvetica", 9, TEXT)
-        _draw_text(c, margin + 140, row_y, item["client_name"], "Helvetica", 9, TEXT)
-        _draw_text(c, margin + 300, row_y, item["task_name"], "Helvetica", 9, TEXT)
+        _draw_text(c, margin + 140, row_y, client_name, "Helvetica", 9, TEXT)
+        _draw_text(c, margin + 300, row_y, task_name, "Helvetica", 9, TEXT)
         _draw_right_text(c, WIDTH - margin, row_y, f"${item['price']:.2f}", "Helvetica", 9, TEXT)
         row_y -= 15
 
@@ -258,14 +264,28 @@ def _draw_itemized_page(c, facility_name, start_date, end_date, items_dated,
             _draw_right_text(c, WIDTH - margin, row_y, f"${item['subtotal']:.2f}", "Helvetica", 9, TEXT)
             row_y -= 15
 
+    # Add cap changes items if any
+    if cap_changes:
+        for item in cap_changes:
+            if row_y < 80:
+                c.showPage()
+                top = HEIGHT - 50
+                row_y = top - 30
+
+            _draw_text(c, margin + 20, row_y, f"Cap Changes ({item['qty']}x)", "Helvetica", 9, TEXT)
+            _draw_right_text(c, WIDTH - margin, row_y, f"${item['subtotal']:.2f}", "Helvetica", 9, TEXT)
+            row_y -= 15
+
     c.setStrokeColor(BORDER)
     c.setLineWidth(0.5)
     c.line(margin, row_y + 5, WIDTH - margin, row_y + 5)
 
     # Calculate grand total consistently with summary page
-    itemized_total = sum(item["price"] for item in items_dated)
+    itemized_total = sum(item["price"] for item in (items_dated or []))
     if supplies:
         itemized_total += sum(item["subtotal"] for item in supplies)
+    if cap_changes:
+        itemized_total += sum(item["subtotal"] for item in cap_changes)
     
     _draw_right_text(c, WIDTH - margin, row_y - 10, "TOTAL", "Helvetica-Bold", 10, NAVY)
     _draw_right_text(c, WIDTH - margin, row_y - 25, f"${itemized_total:.2f}", "Helvetica-Bold", 12, NAVY)

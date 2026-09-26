@@ -4,7 +4,7 @@ set -e
 
 APP_NAME="IVLeague"
 APP_DIR="AppDir"
-VERSION="1.3"
+VERSION="1.4"
 
 echo "Building IV League Desktop v${VERSION} AppImage..."
 

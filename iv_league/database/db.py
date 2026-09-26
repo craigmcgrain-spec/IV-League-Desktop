@@ -142,8 +142,8 @@ def init_db():
         "Dressing Change",
         "Blood Draw",
         "Troubleshoot",
-        "Port Insertion",
         "Port Access",
+        "Cap Change",
         "Supplies: IV",
         "Supplies: Midline",
         "Supplies: PICC",
@@ -174,6 +174,10 @@ def init_db():
     _migrate_add_facility_details()
     _migrate_add_attempts()
     _migrate_add_company_info_and_pricing()
+    _migrate_add_invoice_number()
+    _migrate_add_pricing_categories()
+    _migrate_add_task_categories()
+    _migrate_merge_task_categories()
 
 
 def _migration_applied(name):
@@ -270,6 +274,167 @@ def _migrate_add_company_info_and_pricing():
     """)
     conn.commit()
     _mark_migration_applied("add_company_info_and_pricing")
+
+
+def _migrate_add_invoice_number():
+    if _migration_applied("add_invoice_number"):
+        return
+    conn = get_connection()
+    try:
+        conn.execute("ALTER TABLE invoices ADD COLUMN invoice_number TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    _mark_migration_applied("add_invoice_number")
+
+
+def _migrate_add_pricing_categories():
+    if _migration_applied("add_pricing_categories"):
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pricing_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            display_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pricing_values (
+            task_id INTEGER,
+            category_id INTEGER,
+            price REAL DEFAULT 0,
+            PRIMARY KEY (task_id, category_id),
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+            FOREIGN KEY (category_id) REFERENCES pricing_categories(id) ON DELETE CASCADE
+        )
+    """)
+    
+    existing_prices = cursor.execute(
+        "SELECT task_id, price FROM pricing"
+    ).fetchall()
+    
+    cursor.execute(
+        "INSERT INTO pricing_categories (name, display_order) VALUES (?, ?)",
+        ("Default Price", 0)
+    )
+    default_category_id = cursor.lastrowid
+    
+    for row in existing_prices:
+        cursor.execute(
+            "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, ?)",
+            (row["task_id"], default_category_id, row["price"])
+        )
+    
+    conn.commit()
+    _mark_migration_applied("add_pricing_categories")
+
+
+def _migrate_add_task_categories():
+    if _migration_applied("add_task_categories"):
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS task_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            display_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN category_id INTEGER REFERENCES task_categories(id)")
+    except sqlite3.OperationalError:
+        pass
+    
+    default_categories = [
+        ("Procedures", 0),
+        ("Supplies", 1),
+    ]
+    
+    category_map = {}
+    for name, order in default_categories:
+        cursor.execute(
+            "INSERT INTO task_categories (name, display_order) VALUES (?, ?)",
+            (name, order)
+        )
+        category_map[name] = cursor.lastrowid
+    
+    task_assignments = {
+        "Blood Draw": "Procedures",
+        "Dressing Change": "Procedures",
+        "IV Insertion": "Procedures",
+        "Midline Insertion": "Procedures",
+        "PICC Insertion": "Procedures",
+        "Port Insertion": "Procedures",
+        "Port Access": "Procedures",
+        "Port De-Access": "Procedures",
+        "Troubleshoot": "Procedures",
+        "Cap Change": "Procedures",
+        "Supplies: IV": "Supplies",
+        "Supplies: Midline": "Supplies",
+        "Supplies: PICC": "Supplies",
+        "Supplies: Port Access": "Supplies",
+    }
+    
+    for task_name, category_name in task_assignments.items():
+        category_id = category_map.get(category_name)
+        if category_id:
+            cursor.execute(
+                "UPDATE tasks SET category_id = ? WHERE name = ?",
+                (category_id, task_name)
+            )
+    
+    supply_tasks = [t for t, c in task_assignments.items() if c == "Supplies"]
+    for supply_task in supply_tasks:
+        col_name = supply_task.lower().replace(" ", "_").replace(":", "")
+        try:
+            cursor.execute(f"ALTER TABLE records ADD COLUMN {col_name} REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+    
+    conn.commit()
+    _mark_migration_applied("add_task_categories")
+
+
+def _migrate_merge_task_categories():
+    if _migration_applied("merge_task_categories"):
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    insertions_cat = cursor.execute(
+        "SELECT id FROM task_categories WHERE name = 'Insertions'"
+    ).fetchone()
+    
+    procedures_cat = cursor.execute(
+        "SELECT id FROM task_categories WHERE name = 'Procedures'"
+    ).fetchone()
+    
+    if insertions_cat and procedures_cat:
+        cursor.execute(
+            "UPDATE tasks SET category_id = ? WHERE category_id = ?",
+            (procedures_cat["id"], insertions_cat["id"])
+        )
+        
+        cursor.execute(
+            "DELETE FROM task_categories WHERE id = ?",
+            (insertions_cat["id"],)
+        )
+    
+    cursor.execute(
+        "UPDATE tasks SET category_id = (SELECT id FROM task_categories WHERE name = 'Procedures') WHERE category_id IS NULL AND name NOT LIKE 'Supplies:%'"
+    )
+    
+    conn.commit()
+    _mark_migration_applied("merge_task_categories")
 
 
 if __name__ == "__main__":

@@ -13,18 +13,15 @@ def _parse_procedure_details(details):
     side = ""
     location = ""
     notes = ""
-    attempts = None
     cap_change = 0
 
     if not details:
-        return gauge, side, location, notes, attempts, cap_change
+        return gauge, side, location, notes, cap_change
 
     parts = [p.strip() for p in details.split("·")]
 
     for part in parts:
-        attempts_match = ATTEMPTS_PATTERN.match(part)
-        if attempts_match:
-            attempts = int(attempts_match.group(1))
+        if ATTEMPTS_PATTERN.match(part):
             continue
 
         cap_match = CAP_CHANGE_PATTERN.match(part)
@@ -54,7 +51,7 @@ def _parse_procedure_details(details):
         notes = ""
         location = details
 
-    return gauge, side, location, notes, attempts, cap_change
+    return gauge, side, location, notes, cap_change
 
 
 def parse_csv(path):
@@ -87,7 +84,7 @@ def parse_csv(path):
                 except ValueError:
                     continue
 
-            gauge, side, location, notes, attempts, cap_change = _parse_procedure_details(details)
+            gauge, side, location, notes, cap_change = _parse_procedure_details(details)
 
             rows.append({
                 "facility": facility,
@@ -99,7 +96,6 @@ def parse_csv(path):
                 "side": side,
                 "location": location,
                 "notes": notes,
-                "attempts": attempts,
                 "cap_change": cap_change,
                 "room": room,
                 "clinician_name": clinician_name,
