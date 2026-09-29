@@ -60,49 +60,15 @@ def delete_facility(facility_id):
     return True, "Facility deleted successfully."
 
 
-_ALLOWED_FACILITY_COLUMNS = frozenset({
-    "name", "address", "phone", "contact_name", "contact_email",
-    "street", "city", "zip",
-})
-
-
-def update_facility(facility_id, name=None, address=None, phone=None,
-                    contact_name=None, contact_email=None,
-                    street=None, city=None, zip=None):
+def update_facility(facility_id, name, phone, contact_name, contact_email,
+                    street, city, zip):
     conn = get_connection()
-    fields = []
-    values = []
-    if name is not None:
-        fields.append("name = ?")
-        values.append(name)
-    if address is not None:
-        fields.append("address = ?")
-        values.append(address)
-    if phone is not None:
-        fields.append("phone = ?")
-        values.append(phone)
-    if contact_name is not None:
-        fields.append("contact_name = ?")
-        values.append(contact_name)
-    if contact_email is not None:
-        fields.append("contact_email = ?")
-        values.append(contact_email)
-    if street is not None:
-        fields.append("street = ?")
-        values.append(street)
-    if city is not None:
-        fields.append("city = ?")
-        values.append(city)
-    if zip is not None:
-        fields.append("zip = ?")
-        values.append(zip)
-    if fields:
-        values.append(facility_id)
-        conn.execute(
-            f"UPDATE facilities SET {', '.join(fields)} WHERE id = ?",
-            values,
-        )
-        conn.commit()
+    conn.execute(
+        """UPDATE facilities SET name = ?, phone = ?, contact_name = ?,
+           contact_email = ?, street = ?, city = ?, zip = ? WHERE id = ?""",
+        (name, phone, contact_name, contact_email, street, city, zip, facility_id),
+    )
+    conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +94,6 @@ def add_clinician(name, credentials, is_default=0):
         (name, credentials, is_default),
     )
     conn.commit()
-
-
-def get_clinician_id(name):
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT id FROM clinicians WHERE name = ?", (name,)
-    ).fetchone()
-    return row["id"] if row else None
 
 
 def set_default_clinician(clinician_id):
@@ -248,7 +206,12 @@ def add_record(client_id, facility_id, task_id, date, time,
                clinician_name=None, clinician_credentials=None,
                cap_change=None, supply_values=None):
     conn = get_connection()
-    
+
+    if supply_values:
+        supply_values = dict(supply_values)
+        if "cap_change" in supply_values:
+            cap_change = supply_values.pop("cap_change")
+
     base_cols = "client_id, facility_id, task_id, date, time, gauge, side, location, notes, clinician_name, clinician_credentials, cap_change"
     base_vals = [client_id, facility_id, task_id, date, time, gauge, side, location, notes, clinician_name, clinician_credentials, cap_change]
     
@@ -325,10 +288,15 @@ def get_record_by_id(record_id):
 
 def update_record(record_id, client_id, facility_id, task_id, date, time,
                   gauge=None, side=None, location=None, notes=None,
-                  clinician_name=None, clinician_credentials=None,
-                  cap_change=None, supply_values=None):
+               clinician_name=None, clinician_credentials=None,
+               cap_change=None, supply_values=None):
     conn = get_connection()
-    
+
+    if supply_values:
+        supply_values = dict(supply_values)
+        if "cap_change" in supply_values:
+            cap_change = supply_values.pop("cap_change")
+
     base_update = """UPDATE records SET
         client_id = ?, facility_id = ?, task_id = ?,
         date = ?, time = ?, gauge = ?, side = ?, location = ?,
@@ -359,19 +327,6 @@ def update_record(record_id, client_id, facility_id, task_id, date, time,
 # ---------------------------------------------------------------------------
 # Invoices
 # ---------------------------------------------------------------------------
-
-def get_invoice_records(facility_id, start_date, end_date):
-    conn = get_connection()
-    rows = conn.execute(
-        """SELECT t.name AS task_name, COUNT(*) AS qty
-           FROM records r
-           JOIN tasks t ON r.task_id = t.id
-           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
-           GROUP BY t.name""",
-        (facility_id, start_date, end_date),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
 
 def get_next_invoice_number():
     """Generate a sequential invoice number: INV-YYYY-XXXX."""
@@ -409,13 +364,15 @@ def get_all_invoices():
 
 
 def get_cap_change_items(facility_id, start_date, end_date):
-    """Calculate billed cap changes from records where cap_change = 1."""
+    """Billed cap changes: total quantity entered in the Cap Change field.
+
+    Legacy records store a 0/1 flag and contribute 1 each.
+    """
     conn = get_connection()
     row = conn.execute(
-        """SELECT COUNT(*) AS qty
+        """SELECT COALESCE(SUM(cap_change), 0) AS qty
            FROM records r
-           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?
-             AND r.cap_change = 1""",
+           WHERE r.facility_id = ? AND r.date >= ? AND r.date <= ?""",
         (facility_id, start_date, end_date),
     ).fetchone()
     
@@ -486,119 +443,21 @@ def get_all_pricing():
     return [dict(r) for r in rows]
 
 
-def get_price(task_id, category_id=None):
+def get_price(task_id):
     conn = get_connection()
-    if category_id is None:
-        categories = get_pricing_categories()
-        if not categories:
-            row = conn.execute(
-                "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
-            ).fetchone()
-            return row["price"] if row else 0
-        category_id = categories[0]["id"]
-    
-    row = conn.execute(
-        "SELECT price FROM pricing_values WHERE task_id = ? AND category_id = ?",
-        (task_id, category_id)
-    ).fetchone()
-    if row:
-        return row["price"]
-    
     row = conn.execute(
         "SELECT price FROM pricing WHERE task_id = ?", (task_id,)
     ).fetchone()
     return row["price"] if row else 0
 
 
-def set_price(task_id, price, category_id=None):
-    conn = get_connection()
-    if category_id is None:
-        conn.execute(
-            "INSERT OR REPLACE INTO pricing (task_id, price) VALUES (?, ?)",
-            (task_id, price),
-        )
-    else:
-        conn.execute(
-            "INSERT OR REPLACE INTO pricing_values (task_id, category_id, price) VALUES (?, ?, ?)",
-            (task_id, category_id, price),
-        )
-    conn.commit()
-
-
-def get_pricing_categories():
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT id, name, display_order FROM pricing_categories ORDER BY display_order, name"
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def add_pricing_category(name, display_order=None):
-    conn = get_connection()
-    if display_order is None:
-        row = conn.execute(
-            "SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM pricing_categories"
-        ).fetchone()
-        display_order = row["next_order"]
-    
-    cursor = conn.execute(
-        "INSERT INTO pricing_categories (name, display_order) VALUES (?, ?)",
-        (name, display_order)
-    )
-    category_id = cursor.lastrowid
-    
-    tasks = get_all_tasks()
-    for task in tasks:
-        conn.execute(
-            "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, 0)",
-            (task["id"], category_id)
-        )
-    
-    conn.commit()
-    return category_id
-
-
-def update_pricing_category(category_id, name):
+def set_price(task_id, price):
     conn = get_connection()
     conn.execute(
-        "UPDATE pricing_categories SET name = ? WHERE id = ?",
-        (name, category_id)
+        "INSERT OR REPLACE INTO pricing (task_id, price) VALUES (?, ?)",
+        (task_id, price),
     )
     conn.commit()
-
-
-def delete_pricing_category(category_id):
-    conn = get_connection()
-    conn.execute("DELETE FROM pricing_categories WHERE id = ?", (category_id,))
-    conn.commit()
-
-
-def get_pricing_matrix():
-    conn = get_connection()
-    tasks = get_all_tasks()
-    categories = get_pricing_categories()
-    
-    if not categories:
-        old_pricing = get_all_pricing()
-        return {
-            "tasks": tasks,
-            "categories": [{"id": None, "name": "Price ($)", "display_order": 0}],
-            "values": {(p["task_id"], None): p["price"] for p in old_pricing}
-        }
-    
-    rows = conn.execute(
-        """SELECT task_id, category_id, price 
-           FROM pricing_values 
-           ORDER BY task_id, category_id"""
-    ).fetchall()
-    
-    values = {(r["task_id"], r["category_id"]): r["price"] for r in rows}
-    
-    return {
-        "tasks": tasks,
-        "categories": categories,
-        "values": values
-    }
 
 
 def get_task_categories():
@@ -648,11 +507,14 @@ def get_task_category_name(task_id):
 
 def get_supply_columns():
     conn = get_connection()
+    # Cap Change is categorized as Supplies but stores its quantity in the
+    # dedicated cap_change column (billed via get_cap_change_items) — keeping
+    # it out of this list prevents get_supplies_items from double-billing it.
     rows = conn.execute(
         """SELECT t.id, t.name
            FROM tasks t
            JOIN task_categories tc ON t.category_id = tc.id
-           WHERE tc.name = 'Supplies'
+           WHERE tc.name = 'Supplies' AND t.name != 'Cap Change'
            ORDER BY t.name"""
     ).fetchall()
     
@@ -684,20 +546,12 @@ def add_task(name, category_name=None):
         (name, category_id)
     )
     task_id = cursor.lastrowid
-    
-    categories = get_pricing_categories()
-    if categories:
-        for category in categories:
-            conn.execute(
-                "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, 0)",
-                (task_id, category["id"])
-            )
-    else:
-        conn.execute(
-            "INSERT INTO pricing (task_id, price) VALUES (?, 0)",
-            (task_id,)
-        )
-    
+
+    conn.execute(
+        "INSERT INTO pricing (task_id, price) VALUES (?, 0)",
+        (task_id,)
+    )
+
     if category_name == "Supplies":
         col_name = name.lower().replace(" ", "_").replace(":", "")
         try:

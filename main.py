@@ -16,21 +16,7 @@ def load_stylesheet():
     return ""
 
 
-def validate_assets():
-    """Validate that required assets exist before starting the app."""
-    base = os.path.dirname(__file__)
-    assets = [
-        os.path.join(base, "iv_league", "assets", "icon.png"),
-        os.path.join(base, "iv_league", "assets", "style.qss"),
-    ]
-    missing = [a for a in assets if not os.path.exists(a)]
-    if missing:
-        print(f"Warning: Missing assets: {', '.join(os.path.basename(m) for m in missing)}",
-              file=sys.stderr)
-
-
 def main():
-    validate_assets()
     init_db()
     
     app = QApplication(sys.argv)

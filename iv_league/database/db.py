@@ -1,6 +1,5 @@
 import sqlite3
 import os
-import sys
 
 
 DB_DIR = os.path.expanduser("~/.iv_league")
@@ -175,9 +174,23 @@ def init_db():
     _migrate_add_attempts()
     _migrate_add_company_info_and_pricing()
     _migrate_add_invoice_number()
-    _migrate_add_pricing_categories()
     _migrate_add_task_categories()
     _migrate_merge_task_categories()
+    _migrate_cap_change_to_supplies()
+
+
+def _migrate_cap_change_to_supplies():
+    """Cap Change belongs with Supplies, not Procedures."""
+    if _migration_applied("cap_change_to_supplies"):
+        return
+    conn = get_connection()
+    conn.execute(
+        "UPDATE tasks SET category_id = "
+        "(SELECT id FROM task_categories WHERE name = 'Supplies') "
+        "WHERE name = 'Cap Change'"
+    )
+    conn.commit()
+    _mark_migration_applied("cap_change_to_supplies")
 
 
 def _migration_applied(name):
@@ -220,7 +233,7 @@ def _migrate_add_facility_details():
         return
     conn = get_connection()
     cursor = conn.cursor()
-    for col in ("address", "phone", "contact_name", "contact_email",
+    for col in ("phone", "contact_name", "contact_email",
                 "street", "city", "zip"):
         try:
             cursor.execute(f"ALTER TABLE facilities ADD COLUMN {col} TEXT")
@@ -288,52 +301,6 @@ def _migrate_add_invoice_number():
     _mark_migration_applied("add_invoice_number")
 
 
-def _migrate_add_pricing_categories():
-    if _migration_applied("add_pricing_categories"):
-        return
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pricing_categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            display_order INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pricing_values (
-            task_id INTEGER,
-            category_id INTEGER,
-            price REAL DEFAULT 0,
-            PRIMARY KEY (task_id, category_id),
-            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-            FOREIGN KEY (category_id) REFERENCES pricing_categories(id) ON DELETE CASCADE
-        )
-    """)
-    
-    existing_prices = cursor.execute(
-        "SELECT task_id, price FROM pricing"
-    ).fetchall()
-    
-    cursor.execute(
-        "INSERT INTO pricing_categories (name, display_order) VALUES (?, ?)",
-        ("Default Price", 0)
-    )
-    default_category_id = cursor.lastrowid
-    
-    for row in existing_prices:
-        cursor.execute(
-            "INSERT INTO pricing_values (task_id, category_id, price) VALUES (?, ?, ?)",
-            (row["task_id"], default_category_id, row["price"])
-        )
-    
-    conn.commit()
-    _mark_migration_applied("add_pricing_categories")
-
-
 def _migrate_add_task_categories():
     if _migration_applied("add_task_categories"):
         return
@@ -377,7 +344,7 @@ def _migrate_add_task_categories():
         "Port Access": "Procedures",
         "Port De-Access": "Procedures",
         "Troubleshoot": "Procedures",
-        "Cap Change": "Procedures",
+        "Cap Change": "Supplies",
         "Supplies: IV": "Supplies",
         "Supplies: Midline": "Supplies",
         "Supplies: PICC": "Supplies",
@@ -392,7 +359,10 @@ def _migrate_add_task_categories():
                 (category_id, task_name)
             )
     
-    supply_tasks = [t for t, c in task_assignments.items() if c == "Supplies"]
+    # Cap Change stores its quantity in the dedicated cap_change column
+    # (billed via get_cap_change_items), not its own per-task column.
+    supply_tasks = [t for t, c in task_assignments.items()
+                    if c == "Supplies" and t != "Cap Change"]
     for supply_task in supply_tasks:
         col_name = supply_task.lower().replace(" ", "_").replace(":", "")
         try:

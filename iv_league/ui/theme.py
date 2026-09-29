@@ -432,6 +432,3 @@ QCheckBox::indicator:checked {
     border-color: #00BFC2;
 }
 """
-
-
-LIGHT_STYLE = ""

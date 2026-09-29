@@ -44,11 +44,11 @@ Output: `IVLeague-v1.0.0-x86_64.AppImage`
 
 Requires: Python 3.10+, pip
 
-```batch
-build_windows.bat
+```bash
+bash build_windows.sh
 ```
 
-Output: `dist\IVLeague.exe`
+Output: `dist/IVLeague.exe`
 
 To create an installer:
 1. Download [Inno Setup](https://jrsoftware.org/isinfo.php)

@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QObject, QTimer, QTime
+from PyQt6.QtCore import QObject, QTimer
 import datetime
 from ..database import backup, settings
 

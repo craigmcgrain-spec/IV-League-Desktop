@@ -187,17 +187,8 @@ class InvoicingWidget(QWidget):
         cap_changes = models.get_cap_change_items(fac_id, start, end)
         items_dated = models.get_invoice_items_dated(fac_id, start, end)
 
-        # Build combined display list with supplies & cap changes
-        display_items = []
-        
-        for item in items:
-            display_items.append(item)
-        
-        for supply in supplies:
-            display_items.append(supply)
-        
-        for cap_item in cap_changes:
-            display_items.append(cap_item)
+        # Combined display list with supplies & cap changes
+        display_items = items + supplies + cap_changes
 
         self.table.setRowCount(len(display_items))
         grand_total = 0.0

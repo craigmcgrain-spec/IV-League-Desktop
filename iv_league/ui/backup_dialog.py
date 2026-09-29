@@ -307,7 +307,7 @@ class BackupDialog(QDialog):
             return
         is_valid, reason = backup.verify_backup(name)
         if is_valid:
-            QMessageBox.information(self, "Integrity OK", f"Backup '{name}' passed SHA-256 and SQLite integrity checks.")
+            QMessageBox.information(self, "Integrity OK", f"Backup '{name}' passed the SQLite integrity check.")
         else:
             QMessageBox.critical(self, "Integrity Error", f"Backup '{name}' failed validation:\n{reason}")
 

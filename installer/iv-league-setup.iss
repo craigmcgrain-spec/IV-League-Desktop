@@ -2,7 +2,7 @@
 ; Download Inno Setup from https://jrsoftware.org/isinfo.php
 
 #define MyAppName "IV League Desktop"
-#define MyAppVersion "1.4"
+#define MyAppVersion "1.6"
 #define MyAppPublisher "The IV League II"
 #define MyAppURL "https://github.com/craigmcgrain-spec/IV-League-Desktop"
 #define MyAppExeName "IVLeague.exe"

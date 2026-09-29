@@ -1,0 +1,51 @@
+Completed At (ISO 8601),Task,Clinician Name,Clinician Credentials,Client Name,Facility,Room Number,Gauge,Side,Location,Cap Change,Notes,Supplies: IV,Supplies: Midline,Supplies: PICC,Supplies: Port Access,Procedure Details
+2026-09-03T09:15:00,IV Insertion,Sarah Mitchell,RN,Alice Hartman,Riverside Medical Center,101,22ga,Right,AC,,,2,,,,
+2026-09-10T14:00:00,IV Insertion,Tom Bradley,LPN,Alice Hartman,Riverside Medical Center,101,,,,,,1,,,,24ga · Left Forearm · Cap change: Yes
+2026-09-05T10:30:00,Blood Draw,Aisha Rahman,RN,Robert Chen,Riverside Medical Center,102,,Left,Upper Arm,No,,,,,,
+2026-09-12T11:00:00,Dressing Change,Mark Feldman,IVC,Robert Chen,Riverside Medical Center,102,,,,,,,,,,AC · Attempts: 2
+2026-09-08T13:30:00,Midline Insertion,Sarah Mitchell,RN,Alice Hartman,Riverside Medical Center,101,,Right,AC,,,,1,,,
+2026-09-15T15:45:00,Troubleshoot,Tom Bradley,LPN,Robert Chen,Riverside Medical Center,102,,,,No,Line occluded; flushed with saline,,,,,
+2026-09-17T09:50:00,Cap Change,Aisha Rahman,RN,Alice Hartman,Riverside Medical Center,101,,,,No,,,,,,
+2026-09-19T10:10:00,PICC Insertion,Mark Feldman,IVC,Robert Chen,Riverside Medical Center,102,,Right,Cephalic,,,,,1,,
+2026-09-21T12:00:00,Supplies: IV,Sarah Mitchell,RN,Alice Hartman,Riverside Medical Center,101,,,,,,,,,,
+2026-09-24T08:45:00,Port Access,Tom Bradley,LPN,Robert Chen,Riverside Medical Center,102,,,,,Blood return confirmed,,,,1,
+2026-09-02T08:30:00,IV Insertion,Aisha Rahman,RN,Diana Prince,Oakwood Surgical Suites,201,22ga,Left,Wrist,,,3,,,,
+2026-09-09T09:45:00,IV Insertion,Mark Feldman,IVC,Elias Vogel,Oakwood Surgical Suites,202,,,,,,1,,,,24ga · Right Hand · Attempts: 1 · Cap change: Yes
+2026-09-04T11:15:00,Blood Draw,Sarah Mitchell,RN,Diana Prince,Oakwood Surgical Suites,201,,Right,AC,,,,,,,
+2026-09-11T13:00:00,Dressing Change,Tom Bradley,LPN,Elias Vogel,Oakwood Surgical Suites,202,,Left,Wrist,,,,,,,
+2026-09-16T14:20:00,Midline Insertion,Aisha Rahman,RN,Diana Prince,Oakwood Surgical Suites,201,,Right,Upper Arm,,,,2,,,
+2026-09-18T10:05:00,Troubleshoot,Mark Feldman,IVC,Elias Vogel,Oakwood Surgical Suites,202,,,,No,Kinked tubing repositioned,,,,,
+2026-09-22T15:30:00,Cap Change,Sarah Mitchell,RN,Diana Prince,Oakwood Surgical Suites,201,,,,,,,,,,
+2026-09-25T09:00:00,Blood Draw,Tom Bradley,LPN,Elias Vogel,Oakwood Surgical Suites,202,,,,,,,,,,Forearm · Attempts: 1
+2026-09-26T16:10:00,Supplies: Midline,Aisha Rahman,RN,Diana Prince,Oakwood Surgical Suites,201,,,,,,,,,,
+2026-09-28T11:40:00,Port Access,Mark Feldman,IVC,Elias Vogel,Oakwood Surgical Suites,202,,,,No,,,,,1,
+2026-09-01T09:00:00,IV Insertion,Sarah Mitchell,RN,Frank Osei,Lakeview Nursing Home,301,24ga,Right,AC,,,4,,,,
+2026-09-07T10:20:00,IV Insertion,Tom Bradley,LPN,Grace Kimura,Lakeview Nursing Home,302,,,,,,2,,,,22ga · Left Forearm · Cap change: Yes
+2026-09-13T11:35:00,PICC Insertion,Aisha Rahman,RN,Frank Osei,Lakeview Nursing Home,301,,Left,Brachial,,,,,1,,
+2026-09-14T13:10:00,Dressing Change,Mark Feldman,IVC,Grace Kimura,Lakeview Nursing Home,302,,,,,,,,,,Forearm · Attempts: 3
+2026-09-16T14:45:00,Blood Draw,Sarah Mitchell,RN,Frank Osei,Lakeview Nursing Home,301,,Right,Wrist,No,,,,,,
+2026-09-20T15:15:00,Midline Insertion,Tom Bradley,LPN,Grace Kimura,Lakeview Nursing Home,302,,Left,AC,,,,1,,,
+2026-09-21T16:40:00,Troubleshoot,Aisha Rahman,RN,Frank Osei,Lakeview Nursing Home,301,,,,,Site redness assessed; patent,,,,,
+2026-09-23T09:30:00,Cap Change,Mark Feldman,IVC,Grace Kimura,Lakeview Nursing Home,302,,,,,,,,,,
+2026-09-27T10:50:00,Supplies: PICC,Sarah Mitchell,RN,Frank Osei,Lakeview Nursing Home,301,,,,,,,,,,
+2026-09-29T08:20:00,Blood Draw,Tom Bradley,LPN,Grace Kimura,Lakeview Nursing Home,302,,Left,Upper Arm,,,,,,,
+2026-09-03T11:05:00,IV Insertion,Aisha Rahman,RN,Henry Alvarez,Summit Orthopedic Clinic,401,22ga,Right,Hand,,,1,,,,
+2026-09-06T12:15:00,Blood Draw,Mark Feldman,IVC,Irene Sokolova,Summit Orthopedic Clinic,402,,Right,Forearm,,,,,,,
+2026-09-10T13:25:00,Dressing Change,Sarah Mitchell,RN,Henry Alvarez,Summit Orthopedic Clinic,401,,Left,AC,No,,,,,,Attempts: 1
+2026-09-15T14:35:00,IV Insertion,Tom Bradley,LPN,Irene Sokolova,Summit Orthopedic Clinic,402,,,,,,2,,,,24ga · Left Wrist · Cap change: Yes
+2026-09-18T15:45:00,Port Access,Aisha Rahman,RN,Henry Alvarez,Summit Orthopedic Clinic,401,,,,,Needleless cap changed,,,,,
+2026-09-22T09:55:00,Troubleshoot,Mark Feldman,IVC,Irene Sokolova,Summit Orthopedic Clinic,402,,,,No,Repositioned arm; flow restored,,,,,
+2026-09-24T11:25:00,Midline Insertion,Sarah Mitchell,RN,Henry Alvarez,Summit Orthopedic Clinic,401,,Right,Upper Arm,,,,1,,,
+2026-09-26T13:35:00,Cap Change,Tom Bradley,LPN,Irene Sokolova,Summit Orthopedic Clinic,402,,,,,,,,,,
+2026-09-28T14:45:00,PICC Insertion,Aisha Rahman,RN,Henry Alvarez,Summit Orthopedic Clinic,401,,Right,Brachial,,,,,1,,
+2026-09-29T15:55:00,Supplies: Port Access,Mark Feldman,IVC,Irene Sokolova,Summit Orthopedic Clinic,402,,,,,,,,,,
+2026-09-02T10:40:00,IV Insertion,Sarah Mitchell,RN,James Okafor,Cedar Hill Assisted Living,501,24ga,Left,AC,,,3,,,,
+2026-09-05T11:50:00,Dressing Change,Tom Bradley,LPN,Karen Delgado,Cedar Hill Assisted Living,502,,,,,,,,,,Wrist · Attempts: 2
+2026-09-09T13:05:00,Blood Draw,Aisha Rahman,RN,James Okafor,Cedar Hill Assisted Living,501,,Right,Hand,No,,,,,,
+2026-09-12T14:15:00,IV Insertion,Mark Feldman,IVC,Karen Delgado,Cedar Hill Assisted Living,502,,,,,,1,,,,22ga · Right Forearm · Cap change: Yes
+2026-09-16T15:25:00,Troubleshoot,Sarah Mitchell,RN,James Okafor,Cedar Hill Assisted Living,501,,,,,Leaks at hub; dressing reinforced,,,,,
+2026-09-19T16:35:00,Port Access,Tom Bradley,LPN,Karen Delgado,Cedar Hill Assisted Living,502,,,,No,,,,,1,
+2026-09-23T09:45:00,Midline Insertion,Aisha Rahman,RN,James Okafor,Cedar Hill Assisted Living,501,,Left,AC,,,,1,,,
+2026-09-27T10:55:00,Blood Draw,Mark Feldman,IVC,Karen Delgado,Cedar Hill Assisted Living,502,,Left,Upper Arm,,,,,,,
+2026-08-28T11:05:00,Cap Change,Sarah Mitchell,RN,James Okafor,Cedar Hill Assisted Living,501,,,,,,,,,,
+2026-08-29T12:25:00,Dressing Change,Tom Bradley,LPN,Karen Delgado,Cedar Hill Assisted Living,502,,,,,,,,,,

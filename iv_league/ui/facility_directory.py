@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
-    QFormLayout, QGroupBox, QLabel
+    QFormLayout, QGroupBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from ..database import models

@@ -2,7 +2,6 @@ import os
 import shutil
 import sqlite3
 import datetime
-import hashlib
 from ..database.db import DB_PATH, DB_DIR, get_connection, close_connection
 
 BACKUP_DIR = os.path.join(DB_DIR, "backups")
@@ -10,15 +9,6 @@ BACKUP_DIR = os.path.join(DB_DIR, "backups")
 
 def ensure_backup_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
-
-
-def _compute_sha256(filepath):
-    """Compute SHA-256 checksum of a file."""
-    sha256_hash = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha256_hash.update(chunk)
-    return sha256_hash.hexdigest()
 
 
 def check_database_integrity(filepath):
@@ -62,12 +52,6 @@ def create_backup(filename=None, target_dir=None, is_auto=False, max_auto_retent
     finally:
         dst_conn.close()
 
-    # Compute checksum
-    checksum = _compute_sha256(dst)
-    checksum_file = dst + ".sha256"
-    with open(checksum_file, "w") as f:
-        f.write(checksum)
-
     # Enforce retention policy for automatic backups
     if is_auto and dest_dir == BACKUP_DIR and max_auto_retention > 0:
         _enforce_auto_retention(max_auto_retention)
@@ -93,7 +77,7 @@ def list_backups():
     ensure_backup_dir()
     files = []
     for f in os.listdir(BACKUP_DIR):
-        if f.lower().endswith(".db") and not f.endswith(".sha256"):
+        if f.lower().endswith(".db"):
             p = os.path.join(BACKUP_DIR, f)
             files.append((f, os.path.getmtime(p), os.path.getsize(p)))
     files.sort(key=lambda x: x[1], reverse=True)
@@ -104,26 +88,14 @@ def delete_backup(filename):
     p = os.path.join(BACKUP_DIR, filename)
     if os.path.exists(p):
         os.remove(p)
-    checksum_file = p + ".sha256"
-    if os.path.exists(checksum_file):
-        os.remove(checksum_file)
     return True
 
 
 def verify_backup(filepath_or_name):
-    """Verify both SHA-256 and SQLite PRAGMA integrity."""
+    """Verify SQLite PRAGMA integrity."""
     p = filepath_or_name if os.path.isabs(filepath_or_name) else os.path.join(BACKUP_DIR, filepath_or_name)
     if not os.path.exists(p):
         return False, "File does not exist"
-
-    # Check SHA-256 if .sha256 file exists
-    checksum_file = p + ".sha256"
-    if os.path.exists(checksum_file):
-        with open(checksum_file, "r") as f:
-            expected = f.read().strip()
-        actual = _compute_sha256(p)
-        if actual != expected:
-            return False, "SHA-256 checksum mismatch (file is corrupted)"
 
     # Check SQLite database integrity
     ok, msg = check_database_integrity(p)
@@ -160,8 +132,6 @@ def restore_backup(filepath_or_name):
             dst_conn = sqlite3.connect(safety_dst)
             src_conn.backup(dst_conn)
             dst_conn.close()
-            with open(safety_dst + ".sha256", "w") as f:
-                f.write(_compute_sha256(safety_dst))
         except Exception:
             pass
 

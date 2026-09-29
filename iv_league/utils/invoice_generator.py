@@ -1,10 +1,6 @@
-import math
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import Paragraph
 
 NAVY = colors.HexColor("#12283F")
 TEAL = colors.HexColor("#008A8C")
@@ -55,6 +51,33 @@ def _draw_right_text(c, x, y, text, font="Helvetica", size=11, color=TEXT):
     c.drawRightString(x, y, text)
 
 
+def _address_lines(info):
+    lines = []
+    if info.get("street"):
+        lines.append(info["street"])
+    city = ", ".join(p for p in (info.get("city"), info.get("zip")) if p)
+    if city:
+        lines.append(city)
+    if info.get("phone"):
+        lines.append(info["phone"])
+    name = info.get("contact_name")
+    email = info.get("contact_email")
+    if name and email:
+        lines.append(f"{name} — {email}")
+    elif name:
+        lines.append(name)
+    elif email:
+        lines.append(email)
+    return lines
+
+
+def _draw_address_block(c, x, y, info, right=False):
+    draw = _draw_right_text if right else _draw_text
+    for line in _address_lines(info):
+        draw(c, x, y, line, "Helvetica", 10, MUTED)
+        y -= 15
+
+
 def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
                           facility_details=None, company_info=None, items_dated=None,
                           supplies=None, invoice_number="0001", cap_changes=None):
@@ -76,27 +99,7 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
 
     y_addr = y_left - 22
     if company_info:
-        if company_info.get("street"):
-            _draw_text(c, margin, y_addr, company_info["street"], "Helvetica", 10, MUTED)
-            y_addr -= 15
-        city_parts = []
-        if company_info.get("city"):
-            city_parts.append(company_info["city"])
-        if company_info.get("zip"):
-            city_parts.append(company_info["zip"])
-        if city_parts:
-            _draw_text(c, margin, y_addr, ", ".join(city_parts), "Helvetica", 10, MUTED)
-            y_addr -= 15
-        if company_info.get("phone"):
-            _draw_text(c, margin, y_addr, company_info["phone"], "Helvetica", 10, MUTED)
-            y_addr -= 15
-        if company_info.get("contact_name"):
-            contact = company_info["contact_name"]
-            if company_info.get("contact_email"):
-                contact += f" — {company_info['contact_email']}"
-            _draw_text(c, margin, y_addr, contact, "Helvetica", 10, MUTED)
-        elif company_info.get("contact_email"):
-            _draw_text(c, margin, y_addr, company_info["contact_email"], "Helvetica", 10, MUTED)
+        _draw_address_block(c, margin, y_addr, company_info)
 
     y_right = top - 40
     _draw_right_text(c, WIDTH - margin, y_right + 18, "BILL TO:", "Helvetica-Bold", 9, MUTED)
@@ -105,28 +108,7 @@ def generate_invoice_pdf(filepath, facility_name, start_date, end_date, items,
     y_bill = y_right - 20
 
     if facility_details:
-        y_fac_addr = y_bill
-        if facility_details.get("street"):
-            _draw_right_text(c, WIDTH - margin, y_fac_addr, facility_details["street"], "Helvetica", 10, MUTED)
-            y_fac_addr -= 15
-        fac_city_parts = []
-        if facility_details.get("city"):
-            fac_city_parts.append(facility_details["city"])
-        if facility_details.get("zip"):
-            fac_city_parts.append(facility_details["zip"])
-        if fac_city_parts:
-            _draw_right_text(c, WIDTH - margin, y_fac_addr, ", ".join(fac_city_parts), "Helvetica", 10, MUTED)
-            y_fac_addr -= 15
-        if facility_details.get("phone"):
-            _draw_right_text(c, WIDTH - margin, y_fac_addr, facility_details["phone"], "Helvetica", 10, MUTED)
-            y_fac_addr -= 15
-        if facility_details.get("contact_name"):
-            contact = facility_details["contact_name"]
-            if facility_details.get("contact_email"):
-                contact += f" — {facility_details['contact_email']}"
-            _draw_right_text(c, WIDTH - margin, y_fac_addr, contact, "Helvetica", 10, MUTED)
-        elif facility_details.get("contact_email"):
-            _draw_right_text(c, WIDTH - margin, y_fac_addr, facility_details["contact_email"], "Helvetica", 10, MUTED)
+        _draw_address_block(c, WIDTH - margin, y_bill, facility_details, right=True)
 
     info_y = top - 130
     info_h = 50
